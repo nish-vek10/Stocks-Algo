@@ -1,0 +1,10 @@
+{
+  "downloaded_at_utc": "2026-02-03T12:36:11Z",
+  "source": "finviz_elite_export",
+  "export_url": "https://elite.finviz.com/export.ashx?v=111&auth=b4d1af66-c9af-49d2-92a5-a0ec53993e04",
+  "raw_sha1": "d1c605c9bb26da5e84e43aa4e5fd8b7e6ab80608",
+  "schema_signature": "89226d4ee7c99992024a34218ac1413f5f1517ae",
+  "rows": 10892,
+  "cols": 11,
+  "tag": "v111_all"
+}

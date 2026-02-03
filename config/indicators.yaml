@@ -1,0 +1,19 @@
+# Path: config/indicators.yaml
+version: 0.1
+
+lookbacks:
+  min_history_days: 504      # ~2 years of trading days
+  ema_fast: 10
+  ema_mid: 20
+  ema_slow: 50
+  ema_long: 200
+  donchian: 20
+  bollinger_period: 20
+  rsi_period: 14
+  vol_avg_period: 20
+
+bollinger:
+  stdev: 2.0
+
+volume:
+  rel_vol_threshold: 1.2     # placeholder for "volume expansion" tests

@@ -1,0 +1,11 @@
+# Path: config/spiders.yaml
+version: 0.1
+
+spiders:
+  enabled: true
+  donchian_lookback: 20
+
+regime:
+  # v1: define spider supportive if it's at/near 20D high
+  supportive_if_at_20d_high: true
+  block_if_breaking_20d_low: true

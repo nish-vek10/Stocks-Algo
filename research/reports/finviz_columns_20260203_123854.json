@@ -1,0 +1,23 @@
+{
+  "asof_utc": "2026-02-03T12:38:54Z",
+  "input_file": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\raw\\finviz\\export_v111_all_20260203_123611_d1c605c9bb.parsed.csv",
+  "output_file": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\cleaned\\universe\\universe_finviz_rawpromote_20260203_123854.csv",
+  "rows": 10892,
+  "cols": 14,
+  "columns": [
+    "asof_utc",
+    "source",
+    "raw_file",
+    "no.",
+    "ticker",
+    "company",
+    "sector",
+    "industry",
+    "country",
+    "market_cap",
+    "p/e",
+    "price",
+    "change",
+    "volume"
+  ]
+}

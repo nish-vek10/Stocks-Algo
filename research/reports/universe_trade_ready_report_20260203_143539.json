@@ -1,0 +1,26 @@
+{
+  "asof_utc": "2026-02-03T14:35:39Z",
+  "input": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\cleaned\\universe\\universe_finviz_contract_20260203_124433.csv",
+  "output": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\cleaned\\universe\\universe_trade_ready_20260203_143539.csv",
+  "rows_before": 10892,
+  "rows_after": 3015,
+  "filters": {
+    "country": "USA",
+    "min_market_cap_usd": 300000000,
+    "exclusions_enabled": false,
+    "exclusion_rules_file": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\metadata\\reit_exclusion.csv"
+  },
+  "columns": [
+    "ticker",
+    "company",
+    "sector",
+    "industry",
+    "country",
+    "market_cap_usd",
+    "market_cap_fmt",
+    "pe_num",
+    "price_num",
+    "change_pct",
+    "volume_num"
+  ]
+}

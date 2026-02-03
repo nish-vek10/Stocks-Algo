@@ -1,0 +1,10 @@
+# Path: config/portfolio.yaml
+version: 0.1
+
+portfolio:
+  max_positions: 30
+  sector_cap_pct: 0.25
+  rebalance_frequency: "daily"
+
+sizing:
+  method: "equal_weight"   # placeholder; can evolve to vol targeting

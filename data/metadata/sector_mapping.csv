@@ -1,0 +1,18 @@
+source_sector,canonical_sector
+Consumer Defensive,Consumer Staples
+Consumer Staples,Consumer Staples
+Consumer Cyclical,Consumer Discretionary
+Consumer Discretionary,Consumer Discretionary
+Technology,Technology
+Healthcare,Healthcare
+Financial,Financials
+Financial Services,Financials
+Industrials,Industrials
+Basic Materials,Materials
+Materials,Materials
+Energy,Energy
+Utilities,Utilities
+Communication Services,Communication Services
+Communication,Communication Services
+Real Estate,Real Estate
+Unknown,Unknown

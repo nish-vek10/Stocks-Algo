@@ -1,0 +1,3 @@
+rule_type,pattern,notes
+sector_equals,Real Estate,Exclude all Real Estate sector
+industry_contains,REIT,Exclude anything with REIT in industry name

@@ -1,0 +1,22 @@
+# Path: config/stages.yaml
+version: 0.1
+
+# Notes:
+# - This is a v1 "deterministic but minimal" rule set so the system runs.
+# - We will refine thresholds once you confirm exact stage rules.
+
+rules:
+  require_long_only: true
+  long_mean: "EMA200"
+
+  # Default stop policy (research placeholder)
+  default_stop_pct: 0.06
+
+stage_logic:
+  # Donchian breakout logic (primary trigger)
+  breakout_requires_close_above_donchian_high: true
+  confirm_requires_hold_days: 3
+
+  # Trend constraints (placeholders)
+  require_price_above_ema200_for_stage_8: true
+  fading_requires_close_below_ema10: true

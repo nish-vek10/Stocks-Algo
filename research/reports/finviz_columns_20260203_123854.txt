@@ -1,0 +1,14 @@
+asof_utc
+source
+raw_file
+no.
+ticker
+company
+sector
+industry
+country
+market_cap
+p/e
+price
+change
+volume

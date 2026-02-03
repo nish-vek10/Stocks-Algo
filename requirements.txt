@@ -1,0 +1,6 @@
+# Path: requirements.txt
+pandas
+numpy
+PyYAML
+requests
+python-dotenv
