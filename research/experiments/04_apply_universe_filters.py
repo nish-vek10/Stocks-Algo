@@ -27,7 +27,7 @@ MIN_MARKET_CAP_USD = 300_000_000   # 300M
 COUNTRY_KEEP = "USA"
 
 # --- Toggle exclusions (CSV-driven) ---
-EXCLUSIONS_ENABLED = False
+EXCLUSIONS_ENABLED = True
 
 # --- Columns to remove in trade-ready dataset ---
 DROP_COLS = {

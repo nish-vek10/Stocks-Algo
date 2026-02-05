@@ -1,0 +1,15 @@
+{
+  "asof_utc": "2026-02-05T16:40:31Z",
+  "provider": "twelvedata",
+  "ticker": "AAM",
+  "interval": "1day",
+  "start_date": "2023-01-01",
+  "end_date": "2026-02-01",
+  "timezone": "UTC",
+  "rows": 345,
+  "first_date": "2024-09-16",
+  "last_date": "2026-01-30",
+  "expected_last_date": "2026-01-30",
+  "status": "partial",
+  "output": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\raw\\prices_daily\\twelvedata\\parquets\\AAM.parquet"
+}

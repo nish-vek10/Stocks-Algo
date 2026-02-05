@@ -214,15 +214,94 @@ Only once these questions are answered does automation become relevant.
 
 ---
 
-## 10. Project Status
+## 10. Project Status (as of 2026-02-05)
 
-**Current Phase**  
-- Strategy design & research scaffolding
+### Current Phase
+**Data Foundation + Research Scaffolding.**
 
-**Next Steps**
-- Formalise stage definitions
-- Define backtest assumptions
-- Implement feature pipeline
-- Begin controlled experiments
+We have locked in a reproducible, replayable universe build process and validated the Twelve Data ingestion path using a single-ticker test (AAPL).
+
+### Completed Milestones (so far)
+
+**Universe construction (Finviz)**
+- ✅ Stage 1: Finviz raw export capture (audit-safe, schema logged)
+- ✅ Stage 2: Promote raw → cleaned snapshot (traceable baseline)
+- ✅ Stage 3: Contract dataset creation (typed numeric fields, no drops)
+- ✅ Stage 4: Trade-ready universe filtering (policy layer)
+
+**Trade-ready universe (latest)**
+- ✅ Filters applied:
+  - `country == USA`
+  - `market_cap >= 300M`
+  - REIT exclusions enabled (sector/industry rules)
+- ✅ Resulting universe size:
+  - `rows_after = 2835` tickers (from 10892 total Finviz rows)
+
+**Twelve Data validation**
+- ✅ Single-ticker OHLCV test (AAPL) confirmed correct window coverage:
+  - `start_date = 2023-01-01`
+  - `end_date   = 2026-02-01`
+  - `rows = 772` daily bars (trading days)
+  - first/last dates align with US trading calendar
+
+### In Progress (today)
+- ⏳ Stage 6: Full-universe daily OHLCV ingestion (Twelve Data, free/basic plan)
+  - Outputs per-ticker Parquet under:
+    - `data/raw/prices_daily/twelvedata/{TICKER}.parquet`
+  - Resumable logging:
+    - `data/raw/prices_daily/twelvedata/_progress.jsonl`
+    - `data/raw/prices_daily/twelvedata/_errors.jsonl`
 
 ---
+
+## 11. Operational Notes (Important)
+
+### Twelve Data free/basic limits
+Twelve Data free/basic tier is rate/credit limited. The ingestion pipeline is designed to be:
+- resumable across multiple days
+- safe to interrupt and restart
+- able to continue from last completed ticker
+
+### Partial-history risk (to be hardened)
+If an API response returns a truncated series for a ticker, the current ingestion script may still write the file.
+A robustness patch will be added to:
+- validate minimum expected row count per ticker
+- mark incomplete downloads as `partial` and retry later
+- only mark tickers as `ok` once coverage meets threshold
+
+---
+
+## 12. Next Steps (Locked Order)
+
+### Stage 6 — Complete OHLCV ingestion (3+ years)
+- Finish fetching daily OHLCV for all 2,835 tickers using Twelve Data.
+- Confirm ingestion quality via:
+  - random Parquet → CSV spot checks
+  - missing-date/row-count audits
+  - error + partial retry loop
+- Stage 6 now writes status per ticker:
+  - `status=ok` only if `rows >= TD_MIN_ROWS_OK` and `last_date >= TD_EXPECTED_LAST_DATE`
+  - otherwise `partial` (auto-retried on rerun) 
+- `_progress.jsonl` contains `first_date/last_date/rows` so completeness is auditable
+- Audit script: *06B_audit_twelvedata_downloads.py* produces partial/missing lists.
+
+### Stage 7 — Feature engineering (local compute)
+Compute indicators locally (to reduce API credits and ensure reproducibility):
+- EMA: 10, 20, 50, 100, 200
+- Donchian: 20-day high/low (offset 0)
+- Bollinger Bands: 20 length, 2 std dev (offset 0)
+- MACD: (12, 26, 9)
+
+Then trim to the strategy window:
+- keep last 2 years for backtesting datasets
+- retain the full 3y+ raw set for warmup integrity
+
+### Stage 8 — Analyst overlay (research-only)
+- Add analyst ratings / target price overlay (starting with Yahoo-based fields)
+- Keep as a toggleable filter layer (do not hard-block trades until validated)
+
+### Stage 9 — Stage classifier + backtest harness
+- Formalise stage definitions & transitions
+- Implement daily stage classification per ticker
+- Build backtesting engine + reporting
+
