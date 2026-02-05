@@ -92,17 +92,20 @@ def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return df[["date", "open", "high", "low", "close", "volume"]]
 
 
-def coverage_status(sub: pd.DataFrame) -> Tuple[bool, str, str, int]:
+def coverage_status(sub: pd.DataFrame) -> Tuple[bool, str, str, int, str]:
     """
     Returns:
-      (is_ok, first_date_str, last_date_str, rows)
-    OK if:
-      - rows >= MIN_ROWS_OK
-      - last_date >= EXPECTED_LAST_DATE
+      (is_ok, first_date_str, last_date_str, rows, ok_reason)
+
+    RULE:
+      - OK if last_date >= EXPECTED_LAST_DATE
+      - If OK but rows < MIN_ROWS_OK => ok_short_history (still OK / should be skipped next run)
+      - Else OK => ok
+      - Else partial
     """
     rows = int(len(sub))
     if rows == 0 or "date" not in sub.columns:
-        return (False, None, None, rows)
+        return (False, None, None, rows, "empty_or_missing_date")
 
     first_dt = pd.to_datetime(sub["date"].iloc[0], errors="coerce")
     last_dt  = pd.to_datetime(sub["date"].iloc[-1], errors="coerce")
@@ -110,9 +113,15 @@ def coverage_status(sub: pd.DataFrame) -> Tuple[bool, str, str, int]:
     first_s = first_dt.strftime("%Y-%m-%d") if pd.notna(first_dt) else None
     last_s  = last_dt.strftime("%Y-%m-%d") if pd.notna(last_dt) else None
 
-    exp = pd.to_datetime(EXPECTED_LAST_DATE)
-    ok = (rows >= MIN_ROWS_OK) and (pd.notna(last_dt)) and (last_dt >= exp)
-    return (ok, first_s, last_s, rows)
+    exp = pd.to_datetime(EXPECTED_LAST_DATE, errors="coerce")
+    if pd.isna(last_dt) or pd.isna(exp):
+        return (False, first_s, last_s, rows, "bad_dates")
+
+    if last_dt >= exp:
+        reason = "ok_short_history" if rows < MIN_ROWS_OK else "ok"
+        return (True, first_s, last_s, rows, reason)
+
+    return (False, first_s, last_s, rows, "partial")
 
 
 def read_done_set() -> set:
@@ -121,7 +130,7 @@ def read_done_set() -> set:
         for line in PROGRESS_JSONL.read_text(encoding="utf-8").splitlines():
             try:
                 obj = json.loads(line)
-                if obj.get("status") == "ok":
+                if obj.get("status") in ("ok", "ok_short_history"):
                     t = obj.get("ticker")
                     if t:
                         done.add(str(t).upper().strip())
@@ -161,7 +170,7 @@ def sleep_for_rate_limit(last_req_time: float, batch_credits: int) -> float:
     if gap < min_gap:
         time.sleep(min_gap - gap)
 
-    return last_req_time
+    return time.time()
 
 
 def main() -> None:
@@ -185,6 +194,10 @@ def main() -> None:
     if SMOKE_TICKERS or SMOKE_N > 0:
         print(f"[SMOKE] enabled n={SMOKE_N} tickers='{SMOKE_TICKERS}'")
 
+    if not remaining:
+        print("\n[OK] Nothing to fetch (0 remaining). Exiting without API calls.")
+        return
+
     # Ensure we never request more symbols than credits allowed per minute
     if BATCH_SIZE > CREDITS_PER_MIN:
         print(f"[WARN] BATCH_SIZE={BATCH_SIZE} > credits_per_min={CREDITS_PER_MIN}. Capping batch size.")
@@ -197,7 +210,7 @@ def main() -> None:
     print(f"[UNI]  {uni_path.name}  tickers={len(tickers)} remaining={len(remaining)}")
     print(f"[WIN]  {START_DATE} → {END_DATE}  [{INTERVAL}] tz={TZ}")
     print(f"[CFG]  batch={batch_size_eff} credits_per_min={CREDITS_PER_MIN}")
-    print(f"[GATE] expected_last={EXPECTED_LAST_DATE} min_rows_ok={MIN_ROWS_OK}")
+    print(f"[GATE] expected_last={EXPECTED_LAST_DATE} (rows<{MIN_ROWS_OK} => ok_short_history, still skipped next run)")
     print(f"[OUT]  {OUT_DIR}  (parquets/, meta/, _progress.jsonl)")
 
     td = TDClient(apikey=API_KEY)
@@ -234,9 +247,7 @@ def main() -> None:
                 except Exception as e_req:
                     msg = str(e_req).lower()
                     if "run out of api credits for the current minute" in msg or "out of api credits" in msg:
-                        # Wait a little over a minute then retry the SAME batch
-                        print(
-                            f"[RATE] minute credits hit; sleeping ~65s then retrying batch {i}/{len(batches)} (size={len(batch)})")
+                        print(f"[RATE] minute credits hit; sleeping ~65s then retrying batch {i}/{len(batches)} (size={len(batch)})")
                         time.sleep(65)
                         last_req_time = time.time()
                         continue
@@ -247,15 +258,13 @@ def main() -> None:
 
             # Batch .as_pandas usually returns MultiIndex (symbol, datetime)
             if isinstance(df.index, pd.MultiIndex):
-                # (symbol, datetime) multiindex
                 for sym in batch:
                     try:
                         if sym not in df.index.get_level_values(0):
                             raise KeyError(f"Symbol missing from batch response: {sym}")
                         sub = df.xs(sym, level=0).reset_index()
 
-                        # TwelveData sometimes returns the datetime index column with a weird name (None/level_1)
-                        # If neither datetime nor date exist, assume the first column is the time column and rename it.
+                        # If neither datetime nor date exist, assume first col is time and rename it.
                         if "datetime" not in sub.columns and "date" not in sub.columns and len(sub.columns) > 0:
                             sub = sub.rename(columns={sub.columns[0]: "datetime"})
 
@@ -264,8 +273,8 @@ def main() -> None:
                         out_path = PARQUETS_DIR / f"{sym}.parquet"
                         sub.to_parquet(out_path, index=False)
 
-                        ok, first_s, last_s, rows = coverage_status(sub)
-                        status = "ok" if ok else "partial"
+                        ok, first_s, last_s, rows, ok_reason = coverage_status(sub)
+                        status = ok_reason if ok else "partial"
 
                         append_jsonl(PROGRESS_JSONL, {
                             "asof_utc": utc_now_iso(),
@@ -275,6 +284,7 @@ def main() -> None:
                             "first_date": first_s,
                             "last_date": last_s,
                             "expected_last_date": EXPECTED_LAST_DATE,
+                            "min_rows_ok": MIN_ROWS_OK,
                             "batch_i": i,
                             "batch_size": len(batch),
                             "start_date": START_DATE,
@@ -294,19 +304,18 @@ def main() -> None:
                             "first_date": first_s,
                             "last_date": last_s,
                             "expected_last_date": EXPECTED_LAST_DATE,
+                            "min_rows_ok": MIN_ROWS_OK,
                             "status": status,
                             "output": str(out_path),
                         }
-
                         meta_path.parent.mkdir(parents=True, exist_ok=True)
                         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
                         processed_n += 1
-                        if status == "ok":
+                        if status in ("ok", "ok_short_history"):
                             ok_n += 1
                         else:
                             partial_n += 1
-
 
                     except Exception as e_sym:
                         try:
@@ -328,15 +337,17 @@ def main() -> None:
 
             else:
                 # Some responses might come single-frame; handle defensively
-                # If this happens, we treat it as a single symbol response only.
                 if len(batch) != 1:
                     raise RuntimeError("Non-multiindex response for a batch > 1")
+
                 sym = batch[0]
                 sub = normalize_ohlcv(df.reset_index(drop=False))
+
                 out_path = PARQUETS_DIR / f"{sym}.parquet"
                 sub.to_parquet(out_path, index=False)
-                ok, first_s, last_s, rows = coverage_status(sub)
-                status = "ok" if ok else "partial"
+
+                ok, first_s, last_s, rows, ok_reason = coverage_status(sub)
+                status = ok_reason if ok else "partial"
 
                 append_jsonl(PROGRESS_JSONL, {
                     "asof_utc": utc_now_iso(),
@@ -346,6 +357,7 @@ def main() -> None:
                     "first_date": first_s,
                     "last_date": last_s,
                     "expected_last_date": EXPECTED_LAST_DATE,
+                    "min_rows_ok": MIN_ROWS_OK,
                     "batch_i": i,
                     "batch_size": len(batch),
                     "start_date": START_DATE,
@@ -365,15 +377,15 @@ def main() -> None:
                     "first_date": first_s,
                     "last_date": last_s,
                     "expected_last_date": EXPECTED_LAST_DATE,
+                    "min_rows_ok": MIN_ROWS_OK,
                     "status": status,
                     "output": str(out_path),
                 }
-
                 meta_path.parent.mkdir(parents=True, exist_ok=True)
                 meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
                 processed_n += 1
-                if status == "ok":
+                if status in ("ok", "ok_short_history"):
                     ok_n += 1
                 else:
                     partial_n += 1
@@ -387,7 +399,6 @@ def main() -> None:
                 )
 
         except Exception as e:
-            # If a batch fails, log each ticker as failed so you can retry later
             for sym in batch:
                 append_jsonl(ERRORS_JSONL, {
                     "asof_utc": utc_now_iso(),
@@ -396,7 +407,6 @@ def main() -> None:
                     "batch_i": i,
                     "error": str(e),
                 })
-
                 processed_n += 1
                 err_n += 1
 

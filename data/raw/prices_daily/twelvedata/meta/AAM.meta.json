@@ -1,5 +1,5 @@
 {
-  "asof_utc": "2026-02-05T16:40:31Z",
+  "asof_utc": "2026-02-05T17:04:03Z",
   "provider": "twelvedata",
   "ticker": "AAM",
   "interval": "1day",
@@ -10,6 +10,7 @@
   "first_date": "2024-09-16",
   "last_date": "2026-01-30",
   "expected_last_date": "2026-01-30",
-  "status": "partial",
+  "min_rows_ok": 700,
+  "status": "ok_short_history",
   "output": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\raw\\prices_daily\\twelvedata\\parquets\\AAM.parquet"
 }
