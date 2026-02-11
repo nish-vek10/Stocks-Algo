@@ -13,15 +13,22 @@ ROOT = Path(__file__).resolve().parents[1]  # ALGO-Stocks/
 TICKER = "AAMI"
 
 # Default input (AAPL test output)
-IN_PARQUET = ROOT / "data" / "raw" / "prices_daily" / "twelvedata" / "parquets" / f"{TICKER}.parquet"
+# IN_PARQUET = ROOT / "data" / "raw" / "prices_daily" / "twelvedata" / "parquets" / f"{TICKER}.parquet"
 
 # Output dir for human inspection
-OUT_DIR = ROOT / "data" / "raw" / "prices_daily" / "twelvedata" / "csv"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+# OUT_DIR = ROOT / "data" / "raw" / "prices_daily" / "twelvedata" / "csv"
+# OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Output file name
-OUT_CSV = OUT_DIR / f"{TICKER}.csv"
+# OUT_CSV = OUT_DIR / f"{TICKER}.csv"
 
+# ==== FOR GENERAL FILES ====
+PARQUET_FILE = "spider_gate_daily"
+
+IN_PARQUET = ROOT / "data" / "cleaned" / "spiders_daily" / "gate" / f"{PARQUET_FILE}.parquet"
+OUT_DIR = ROOT / "data" / "cleaned" / "spiders_daily" / "gate" / "csv"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_CSV = OUT_DIR / f"{PARQUET_FILE}.csv"
 
 def main() -> None:
     print("\n=== Parquet → CSV ===")

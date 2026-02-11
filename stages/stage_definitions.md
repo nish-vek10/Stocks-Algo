@@ -16,6 +16,7 @@ Stages determine:
 - When **exits** are triggered
 
 This is a **state machine**, not a signal generator:
+
 - Stages describe *context*
 - Signals act *within* that context
 
@@ -28,34 +29,37 @@ This is a **state machine**, not a signal generator:
 - **Point-in-time safe**: no future data
 - **Hierarchical**: higher-risk stages override lower ones
 - **Explainable**: each stage has explicit reasons
+- **Research-first**: stages are validated by backtests; thresholds are configuration-driven
 
 ---
 
 ## 3. Core Indicators Used
 
-The following indicators are used to determine stages:
+The following indicators are used to determine stages (configuration-driven via `config/indicators.yaml`):
 
 - **EMA Stack**
-  - EMA10 / EMA20 / EMA50 / EMA200
+  - EMA10 / EMA20 / EMA50 / EMA100 / EMA200
 - **Long-Term Mean**
-  - EMA200 (configurable)
+  - EMA200 (configurable anchor)
 - **Donchian Channels**
   - 20-day high / low (primary trigger)
 - **Bollinger Bands**
   - 20-period, 2 standard deviations
 - **Volume**
-  - Relative to 20-day average
-- **Momentum**
-  - RSI / MACD (confirmation only)
+  - 10-day average volume + surge flag (e.g. > 1.15× average)
+- **Momentum (optional confirmations)**
+  - MACD (12, 26, 9), RSI(14)
 
-> **Note:** All lookbacks require **minimum 2 years of price history** per stock.
+> **Warmup note:** 
+> - Indicators require sufficient lookback history (e.g. EMA200 + Donchian20 + BB20).  
+> - IPO/short-history tickers are handled after warmup and may be flagged “insufficient history” in early periods.
 
 ---
 
 ## 4. Stage Overview
 
-| Stage | Name                  | Trade Action |
-|------:|-----------------------|-------------|
+| Stage | Name                 | Trade Action |
+|------:|----------------------|-------------|
 | 1 | Not Eligible | Ignore |
 | 2 | Sharp Downtrend | Block |
 | 3 | Downtrend | Block |
@@ -64,7 +68,7 @@ The following indicators are used to determine stages:
 | 6 | Breakout | Entry Allowed |
 | 7 | Breakout Confirmed | Entry Preferred |
 | 8 | In-Zone | Hold / Manage |
-| 9 | In-Zone (Fading) | Exit |
+| 9 | In-Zone (Fading) | Exit Candidate |
 
 ---
 
@@ -75,72 +79,85 @@ The following indicators are used to determine stages:
 ### **Stage 1 — Not Eligible**
 
 **Description**  
-Price shows no meaningful deviation or structure that supports mean reversion.
+Stock is not eligible because price remains above the long-term mean.
 
 **Typical Characteristics**
-- Price near EMA200
-- Inside Bollinger Bands
-- No Donchian breakout
-- Flat or low volatility
-- Weak or inconsistent volume
+- Price **above EMA200**
+- Other signals are treated as informational only (eligibility gate dominates)
 
 **Action**
-- NO TRADE
+- NO TRADE  
 - NO WATCHLIST
+
+**Hard rule**
+- Remains Stage 1 until price closes below EMA200.
 
 ---
 
 ### **Stage 2 — Sharp Downtrend**
 
 **Description**  
-Strong bearish impulse with accelerating downside momentum.
+Strong bearish impulse with accelerating downside momentum. This stage establishes the **mandatory dislocation** required for later mean-reversion trades.
 
-**Typical Characteristics**
+**Detection rule (important)**
+- Stage 2 is detected over a rolling **5–7 day window**. Required markers do **not** need to align on the same day.
+
+**Typical Characteristics (required markers within window)**
 - Price below EMA200
-- EMA stack strongly bearish (EMA10 < EMA20 < EMA50 < EMA200)
-- New Donchian 20-day lows
-- Expanding Bollinger Bands
-- High downside volume
+- Sharp decline (e.g. **> 5% over ~3 trading days**)
+- Close below **lower Bollinger Band** (20, 2 SD)
+- EMA10 slope negative and falling meaningfully (e.g. ~1% per day)
+
+**Optional Confirmations**
+- Volume surge: **> 1.15× 10-day average**
+- New Donchian 20-day low
 
 **Action**
-- NO TRADE
-- NO WATCHLIST
+- NO TRADE  
+- NO WATCHLIST  
 - HIGH-RISK ENVIRONMENT
+
+**State memory**
+- If a ticker prints Stage 2 at any point, it becomes **eligible-in-principle** for future Stage 6 entries (subject to later rules).
 
 ---
 
 ### **Stage 3 — Downtrend**
 
 **Description**  
-Sustained bearish trend, but without sharp acceleration.
+Sustained bearish trend, but without the sharp acceleration required for a dislocation setup.
 
 **Typical Characteristics**
 - Price below EMA200
-- Bearish EMA stack
-- Lower highs / lower lows
-- Donchian lows respected
+- Slower, grinding decline (lower highs / lower lows)
+- Price often between Bollinger midline and lower band
+- No persistent new Donchian lows (or weakness is less impulsive)
 - Moderate volume
 
 **Action**
-- NO TRADE
+- NO TRADE  
 - NO WATCHLIST
+
+**Eligibility constraint (design-locked)**
+- Stage 3 alone is never tradable.  
+- A ticker must have recorded **Stage 2 at least once historically** to become eligible for Stage 6 entry later.
 
 ---
 
 ### **Stage 4 — Below Zone**
 
 **Description**  
-Downtrend is slowing; price is deeply below long-term mean but beginning to stabilize.
+Downtrend is slowing; price remains below the long-term mean but begins stabilising (early basing).
 
 **Typical Characteristics**
 - Price below EMA200
-- EMA slope flattening
-- Bollinger Bands contracting
-- Donchian lows no longer expanding
-- Selling pressure weakening
+- No new Donchian lows (or lows stop expanding)
+- Sideways or stabilising price action
+- Bollinger Bands contracting (volatility compression)
+- Selling pressure/volume normalising
 
 **Action**
-- EARLY WATCHLIST
+- EARLY WATCHLIST  
 - NO ENTRY
 
 ---
@@ -148,53 +165,55 @@ Downtrend is slowing; price is deeply below long-term mean but beginning to stab
 ### **Stage 5 — Lower Zone**
 
 **Description**  
-Base formation phase; potential transition into mean reversion.
+Base formation progresses; early recovery signals appear. This is the “setup maturation” zone before a breakout trigger.
 
 **Typical Characteristics**
-- Price still below EMA200
-- Higher lows forming
-- EMA10 / EMA20 flattening or crossing upward
-- Bollinger mid-band approached
-- Volume stabilizing
+- Price still below EMA200 (often)
+- Price enters the **upper half** of the Donchian range (relative positioning)
+- Close above EMA10
+- EMA10 crosses above EMA20 (or stack begins to improve)
+- Volume stabilises, volatility reduces
 
 **Action**
-- WATCHLIST
-- NO ENTRY UNLESS EXPLICITLY TESTED
+- WATCHLIST  
+- NO ENTRY (unless explicitly tested as a research variant)
 
 ---
 
-### **Stage 6 — Breakout**
+### **Stage 6 — Breakout (Primary Entry Stage)**
 
 **Description**  
-Initial confirmation that mean reversion has started.
+Initial confirmation that mean reversion has started. This is the first valid long entry stage.
 
-**Typical Characteristics**
-- Donchian 20-day **high breakout**
-- Price moves above short-term EMAs
-- Bollinger expansion upward
-- Volume expansion
-- Price still below or near EMA200
+**Typical Characteristics (entry requirements)**
+- Break above **Donchian 20-day high** (breakout trigger)
+- Price above EMA10, with **EMA10 > EMA20**
+- Volume surge: **> 1.15× 10-day average**
+- Structure improving after prior dislocation/basing (Stages 2 → 4/5 → 6)
 
 **Action**
-- ENTRY ALLOWED
-- REQUIRES SUPPORTIVE SECTOR ("SPIDER")
+- ENTRY ALLOWED  
+- REQUIRES SUPPORTIVE SECTOR (“SPIDER”) REGIME
+
+**Hard constraint**
+- Entries are only valid if the ticker has previously printed **Stage 2** at some point in its history.
 
 ---
 
 ### **Stage 7 — Breakout Confirmed**
 
 **Description**  
-Breakout holds and trend quality improves.
+Breakout holds and follow-through confirms trend quality. Prefer entries here when available.
 
 **Typical Characteristics**
-- Price holds above Donchian breakout level
-- EMA10 > EMA20 > EMA50
+- Price holds above breakout level (no immediate failure)
+- EMA10 > EMA20 > EMA50 (improving stack)
 - Positive EMA slopes
-- Above-average volume on advances
-- No immediate breakout failure
+- Elevated volume persists on advances
+- Momentum confirms continuation (optional RSI/MACD confirmation)
 
 **Action**
-- PREFERRED ENTRY STAGE
+- PREFERRED ENTRY STAGE  
 - CORE TRADE INITIATION ZONE
 
 ---
@@ -202,72 +221,76 @@ Breakout holds and trend quality improves.
 ### **Stage 8 — In-Zone**
 
 **Description**  
-Price has entered the mean reversion “value zone”.
+Mean reversion progresses; position is held and actively managed.
 
 **Typical Characteristics**
-- Price above EMA200
-- Strong EMA alignment
-- Stable trend
-- Bollinger mid-to-upper band
-- Momentum positive but slowing
+- Price above EMA200 (often, but not strictly required)
+- Trend stable; EMA alignment remains constructive
+- Bollinger mid-to-upper band behaviour
+- Momentum positive but may begin slowing
 
 **Action**
-- HOLD POSITION
-- MONITOR FOR FADING SIGNALS
+- HOLD POSITION  
+- MANAGE RISK / TRAIL RULES (as defined in exit framework)
 
 ---
 
 ### **Stage 9 — In-Zone (Fading)**
 
 **Description**  
-Mean reversion is mature; upside momentum deteriorates.
+Mean reversion is mature; upside momentum deteriorates and the probability of fade increases.
 
 **Typical Characteristics**
 - EMA10 flattens or turns down
-- Momentum divergence
+- Momentum divergence / loss of impulse
 - Bollinger contraction or rejection
 - Failure to make new highs
 - Weakening volume
 
 **Action**
-- EXIT POSITION
-- LOCK IN PROFITS
+- EXIT CANDIDATE / RISK OF FADE  
+- Until exit logic is finalised, manage using **hard stops** and/or **time-based rules**.
 
 ---
 
-## 6. Stage Transitions
+## 6. Stage Transitions (High-Level)
 
-- Stages progress **sequentially**, but can skip stages in strong moves
-- Downward transitions override upward bias
-- Exit signals **always dominate** entry signals
+- Stages generally progress **sequentially**, but may skip stages in strong moves (e.g. Stage 2 → Stage 4).
+- Downward conditions override upward progression (risk-first).
+- Exit conditions dominate entry logic (once exits are formalised).
+
+**Non-negotiable rule**
+- A ticker that never experienced a **Stage 2 sharp dislocation** is never eligible for a Stage 6/7 entry.
 
 ---
 
 ## 7. Relationship to Sector (“Spider”) Regime
 
-Stage-based entries are **only valid** if the corresponding sector spider is supportive.
+Stage-based entries are only valid if the corresponding sector spider is supportive.
 
-- Strong sector → full signal validity
-- Neutral sector → reduced size
-- Weak sector → block entries
+- Strong sector spider → full signal validity
+- Neutral sector spider → reduced size / caution
+- Weak sector spider → block entries
+
+This ensures alignment between **micro stock setups** and **macro sector structure**.
 
 ---
 
 ## 8. Research Notes
 
-- Not all stages are expected to generate alpha
+- Not all stages are expected to generate alpha.
 - Edge is expected primarily in:
   - Stage 6 (Breakout)
   - Stage 7 (Breakout Confirmed)
-- Stage effectiveness must be validated via backtesting
+- Stage effectiveness must be validated via backtesting and sensitivity analysis.
 
 ---
 
 ## 9. Versioning
 
-- Stage logic is **configuration-driven**
-- All thresholds must be documented and versioned
-- Changes require re-running backtests
+- Stage logic is **configuration-driven** (`config/stages.yaml`, `config/indicators.yaml`).
+- Threshold changes must be documented and versioned.
+- Any change requires re-running backtests to preserve audit integrity.
 
 ---
 

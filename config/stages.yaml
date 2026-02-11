@@ -20,3 +20,5 @@ stage_logic:
   # Trend constraints (placeholders)
   require_price_above_ema200_for_stage_8: true
   fading_requires_close_below_ema10: true
+
+  require_breakout_before_inzone: true

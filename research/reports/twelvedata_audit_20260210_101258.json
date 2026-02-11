@@ -1,0 +1,13 @@
+{
+  "asof_utc": "2026-02-10T10:12:58Z",
+  "universe_file": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\cleaned\\universe\\universe_trade_ready_20260203_143539.csv",
+  "prices_dir": "C:\\Users\\anish\\PycharmProjects\\ALGO-Stocks\\data\\raw\\prices_daily\\twelvedata\\parquets",
+  "expected_last_date": "2026-01-30",
+  "min_rows_ok": 700,
+  "tickers_total": 3015,
+  "files_present": 2750,
+  "missing_files": 265,
+  "ok": 2479,
+  "partial": 271,
+  "error": 0
+}
