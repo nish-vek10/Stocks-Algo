@@ -1,2 +1,5 @@
 .venv/
 .env
+
+# Large research datasets
+data/

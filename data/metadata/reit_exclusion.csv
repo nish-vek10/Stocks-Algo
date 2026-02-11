@@ -1,5 +1,0 @@
-rule_type,pattern,notes
-sector_equals,Real Estate,Drop Real Estate sector (REITs and related)
-industry_contains,REIT,Drop any industry containing REIT
-industry_contains,REIT -,Drop any industry containing REIT -
-industry_contains,Real Estate,Drop any industry containing Real Estate
