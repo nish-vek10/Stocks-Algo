@@ -3,3 +3,8 @@
 
 # Large research datasets
 data/
+
+# Python cache
+# Python cache
+__pycache__/
+*.pyc
