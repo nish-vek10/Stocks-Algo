@@ -55,8 +55,8 @@ STAGES_YAML = ROOT / "config" / "stages.yaml"
 # -----------------------------------------------------------------------------
 # Smoke mode
 # -----------------------------------------------------------------------------
-SMOKE_N: Optional[int] = 5        # e.g. 5 or None for all
-SMOKE_TICKERS: Optional[str] = "AAPL,MSFT,NVDA,TSLA,AMZN"  # e.g. "AAPL,MSFT,NVDA" or None for all
+SMOKE_N: Optional[int] = None        # e.g. 5 or None for all
+SMOKE_TICKERS: Optional[str] = None  # e.g. "AAPL,MSFT,NVDA" or None for all
 
 # -----------------------------------------------------------------------------
 # Canonical classifier

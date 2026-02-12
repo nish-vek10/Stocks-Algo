@@ -1,9 +1,9 @@
 .venv/
-.env
-
-# Large research datasets
-data/
-
+#.env
+#
+## Large research datasets
+#data/
+#
 # Python cache
 # Python cache
 __pycache__/

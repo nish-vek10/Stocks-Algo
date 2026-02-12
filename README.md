@@ -773,9 +773,10 @@ Partial rebuilds are not valid when extending historical depth.
 
 --- 
 
-## Optional Commands *(from root folder ALGO-STOCKS)*
+## Optional Commands
+### *(from root folder ALGO-STOCKS)*
 
-- After running 07D - Classification of Spider Stages
+- After running **07D - Classification of Spider Stages**
 - Running these in order for testing purposes
 
 ```
@@ -789,6 +790,23 @@ python -c "import pandas as pd; df=pd.read_parquet(r'data\cleaned\spiders_daily\
 ```
 ```
 python -c "import pandas as pd; df=pd.read_parquet(r'data\cleaned\spiders_daily\stages\SECTOR_FINANCIALS.parquet'); print(df.tail(5))"
+```
+
+- After running **08B - Classification of Stock Stages**
+- Running these in order for testing purposes
+
+```
+python -c "import pandas as pd; df=pd.read_parquet(r'data\cleaned\stocks_daily\stages\AAPL.parquet'); print(df['stage'].value_counts().sort_index())"
+```
+
+```
+python -c "import pandas as pd, glob; import os; 
+paths=glob.glob(r'data/cleaned/stocks_daily/stages/*.parquet'); 
+hit=0
+for p in paths[:500]:
+    df=pd.read_parquet(p, columns=['stage'])
+    if (df['stage']==6).any(): hit+=1
+print('tickers_with_stage6_in_first500=', hit)"
 ```
 
 ---
