@@ -474,15 +474,15 @@ Only once these questions are answered does automation become relevant.
 
 ---
 
-## 10. Project Status *(as of 2026-02-11)*
+## 10. Project Status *(as of 2026-02-17)*
 
 ### Current Phase
-- **Data foundation + spiders scaffold complete. Indicators are now canonical and ready for feature engineering.**
-- **4-year OHLCV ingestion (2022–2026) running on secondary machine**
-- **Full spider pipeline complete (OHLCV → features → stages → gate)**
-- **08A Stock Feature Engineering complete for full universe**
-- **Ready to run 08B stock stage classification**
-- **System stable and deterministic**
+- **Data foundation + spiders scaffold complete. Indicators are canonical and deterministic.**
+- **5-year OHLCV ingestion complete (2021–2026): `TD_START_DATE=2021-01-01`, `TD_END_DATE=2026-02-01`**
+- **Full spider pipeline complete:** 07A → 07B → 07C → 07D → 07G
+- **08A Stock Feature Engineering complete for full universe (features written)**
+- **08B stock stage classification smoke-tested successfully; ready to run full universe**
+- **Known permanent data gaps tracked (see “Provider Exceptions” below)**
 
 The framework is now feature-complete through macro gating and ready for full historical stage classification across all equities.
 
@@ -505,9 +505,9 @@ The framework is now feature-complete through macro gating and ready for full hi
 
 **Twelve Data validation**
 - ✅ Single-ticker OHLCV test (AAPL) confirmed correct window coverage:
-  - `start_date = 2023-01-01`
+  - `start_date = 2021-01-01`
   - `end_date   = 2026-02-01`
-  - `rows = 772` daily bars (trading days)
+  - `rows = ~1275` daily bars (trading days)
   - first/last dates align with US trading calendar
 - ✅ Multi-ticker batch ingestion validated
 - ✅ Restart-safe progress tracking implemented
@@ -515,10 +515,18 @@ The framework is now feature-complete through macro gating and ready for full hi
 - ✅ No silent failures observed (`_errors.jsonl` remains empty)
 
 **Stage 6 — OHLCV ingestion (Twelve Data)**
-- ✅ Daily OHLCV collected for **2,831 / 2,835** tickers
-- ✅ 4 permanently excluded due to provider symbol mismatch (documented)
-- ✅ Restart-safe progress tracking + credit-aware throttling
-- ✅ Audit scripts for missing/partial/error handling
+- ✅ Daily OHLCV collected for full trade-ready universe (with short-history handling)
+- ✅ Window: `2021-01-01 → 2026-02-01`
+- ✅ Gate: `expected_last_date = 2026-01-30`, `min_rows_ok = 1200`
+- ✅ `ok_short_history` correctly applied to IPOs / recent listings
+- ✅ Retry pass completed; remaining hard-fails documented (see below)
+
+**Provider Exceptions (final hard-fails after retry)**
+The following tickers remain unavailable via TwelveData (symbol invalid / no data on dates):
+- `ALUB-U` (also tried `ALUB.U`) → symbol invalid
+- `NWAX-U` (also tried `NWAX.U`) → symbol invalid
+- `SBXE-U` (also tried `SBXE.U`) → symbol invalid
+- `PLYX` → “No data available on specified dates”
 
 **Ingestion outcome**
 - Total universe: **2,835 tickers**
@@ -677,7 +685,7 @@ Run the shared stage classifier across each ticker:
 
 ---
 
-# 13. 4-Year Data Refresh Protocol *(2022–2026)*
+# 13. Historical Window Refresh Protocol *(2021–2026)*
 
 This section documents the correct reset + rebuild order when expanding the historical window.
 
@@ -686,8 +694,10 @@ New raw parquets will live in: `ROOT\data\raw\prices_daily\twelvedata\parquets`
 - **Currently Running:**
   1. 06 - fetch twelvedata OHLCV
      - for additional data
-       - `TD_START_DATE=2022-01-01` 
+       - `TD_START_DATE=2021-01-01` 
        - `TD_END_DATE=2026-02-01`
+       - Expected last trading day gate: `TD_EXPECTED_LAST_DATE=2026-01-30`
+       - Full-history threshold: `TD_MIN_ROWS_OK=1200`
   2. 06B - audit for downloaded data
   3. 06C - retry for stocks missed in batches
      - mainly because misaligned API documentation
@@ -699,7 +709,7 @@ When the laptop fetch is complete and files are copied to the work machine:
 
 #### Step 1 — Delete Derived Layers Only (DO NOT delete raw parquets)
 
-We need to delete/reset the following folders:
+Delete/reset these derived folders (safe to rebuild any time):
 ```yaml
 data/cleaned/spiders_daily/features/
 data/cleaned/spiders_daily/stages/
@@ -707,6 +717,8 @@ data/cleaned/spiders_daily/gate/
 data/cleaned/stocks_daily/features/
 data/cleaned/stocks_daily/stages/
 ```
+
+Delete/reset these restart logs (so a full rebuild actually re-runs everything):
 ```yaml
 data/cleaned/stocks_daily/features/_progress.jsonl
 data/cleaned/stocks_daily/features/_errors.jsonl
@@ -714,10 +726,21 @@ data/cleaned/stocks_daily/stages/_progress.jsonl
 data/cleaned/stocks_daily/stages/_errors.jsonl
 ```
 
+(If present) also clear spider build logs:
+```
+data/cleaned/spiders_daily/features/_progress.jsonl
+data/cleaned/spiders_daily/features/_errors.jsonl
+data/cleaned/spiders_daily/stages/_progress.jsonl
+data/cleaned/spiders_daily/stages/_errors.jsonl
+data/cleaned/spiders_daily/gate/_progress.jsonl
+data/cleaned/spiders_daily/gate/_errors.jsonl
+```
+
 - **DO NOT delete/reset:**
 
 ```yaml
 data/raw/prices_daily/twelvedata/parquets/
+data/raw/spiders_daily/ (optional; can be rebuilt but no harm keeping)
 data/metadata/spiders/
 ```
 
@@ -727,10 +750,11 @@ data/metadata/spiders/
      - optional to run for UI graphics - `zTester/03_spider_treemap.py`
   2. 07B - spiders OHLCV 
   3. 07C - spider features 
-  4. 07D - spider stages 
-  5. 08A - stock features ✅ (creates `stocks_daily/features/*.parquet`)
-  6. 07E - attach sector stage to stocks ✅ 
-  7. 08B - stock stages (optional whether before/after 07E — both fine)
+  4. 07D - classification of spider stages 
+  5. 07G - building spider gates
+  6. 08A - build stock features (creates `stocks_daily/features/*.parquet`)
+  7. 07E - attach sector stage to stocks
+  8. 08B - classification of stock stages
 
 If stock stage classifier later wants sector stage as an input feature, then do 07E before 08B.
 If sector stage is purely a gate during backtest/signal evaluation, it can be done after 08B.
@@ -739,12 +763,14 @@ If sector stage is purely a gate during backtest/signal evaluation, it can be do
 
 #### From project root:
 
-```
-python research/experiments/07B_build_spider_ohlcv.py
-python research/experiments/07C_build_spider_features.py
+```powershell
+python research/experiments/07A_build_spider_memberships.py
+python research/experiments/07B_build_spider_ohlcv_from_parquets.py
+python research/experiments/07C_compute_spider_features.py
 python research/experiments/07D_classify_spider_stages.py
 python research/experiments/07G_build_spider_gate_daily.py
 python research/experiments/08A_build_stock_features.py
+python research/experiments/07E_attach_sector_stage_to_stocks.py
 python research/experiments/08B_classify_stock_stages.py
 ```
 
@@ -799,13 +825,12 @@ python -c "import pandas as pd; df=pd.read_parquet(r'data\cleaned\spiders_daily\
 python -c "import pandas as pd; df=pd.read_parquet(r'data\cleaned\stocks_daily\stages\AAPL.parquet'); print(df['stage'].value_counts().sort_index())"
 ```
 
+- And (optional) check “stage 6 exists in sample”:
 ```
-python -c "import pandas as pd, glob; import os; 
-paths=glob.glob(r'data/cleaned/stocks_daily/stages/*.parquet'); 
-hit=0
+python -c "import pandas as pd, glob; paths=glob.glob(r'data/cleaned/stocks_daily/stages/*.parquet'); hit=0; 
 for p in paths[:500]:
     df=pd.read_parquet(p, columns=['stage'])
-    if (df['stage']==6).any(): hit+=1
+    hit += int((df['stage']==6).any())
 print('tickers_with_stage6_in_first500=', hit)"
 ```
 

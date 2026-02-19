@@ -1,3 +1,5 @@
+# zTester/02_jsonl_to_csv.py
+
 """
 Generic JSON / JSONL → CSV converter
 
@@ -16,16 +18,15 @@ import pandas as pd
 
 
 # ============================================================
-# CONFIG — change ONLY these
+# CONFIG
 # ============================================================
-SOURCE_DIR = Path(r"data/raw/prices_daily/twelvedata")
+ROOT = Path(__file__).resolve().parents[1]  # ALGO-STOCKS root
+SOURCE_DIR = ROOT / "data" / "raw" / "prices_daily" / "twelvedata"
 FILE_BASENAME = "_errors"
-
 
 # ============================================================
 # SCRIPT
 # ============================================================
-SOURCE_DIR = SOURCE_DIR.resolve()
 
 json_path = SOURCE_DIR / f"{FILE_BASENAME}.json"
 jsonl_path = SOURCE_DIR / f"{FILE_BASENAME}.jsonl"

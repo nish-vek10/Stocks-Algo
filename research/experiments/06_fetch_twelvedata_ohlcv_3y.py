@@ -21,12 +21,12 @@ load_dotenv(ROOT / ".env")
 
 API_KEY = os.getenv("TWELVEDATA_API_KEY", "").strip()
 INTERVAL = os.getenv("TD_INTERVAL", "1day").strip()
-START_DATE = os.getenv("TD_START_DATE", "2023-01-01").strip()
+START_DATE = os.getenv("TD_START_DATE", "2021-01-01").strip()
 END_DATE = os.getenv("TD_END_DATE", "2026-02-01").strip()
 TZ = os.getenv("TD_TIMEZONE", "UTC").strip()
 
 CREDITS_PER_MIN = int(os.getenv("TD_CREDITS_PER_MIN", os.getenv("TD_REQUESTS_PER_MIN", "8")))
-BATCH_SIZE = int(os.getenv("TD_BATCH_SIZE", "20"))
+BATCH_SIZE = int(os.getenv("TD_BATCH_SIZE", "8"))
 OUTPUTSIZE = int(os.getenv("TD_OUTPUTSIZE", "5000"))
 
 SMOKE_N = int(os.getenv("TD_SMOKE_N", "0"))
@@ -34,7 +34,7 @@ SMOKE_TICKERS = os.getenv("TD_SMOKE_TICKERS", "").strip()
 
 # Completeness gates (prevents marking partial tickers as OK)
 EXPECTED_LAST_DATE = os.getenv("TD_EXPECTED_LAST_DATE", "2026-01-30").strip()
-MIN_ROWS_OK = int(os.getenv("TD_MIN_ROWS_OK", "700"))
+MIN_ROWS_OK = int(os.getenv("TD_MIN_ROWS_OK", "1200"))
 
 
 UNIVERSE_DIR = ROOT / "data" / "cleaned" / "universe"
