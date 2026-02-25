@@ -1,0 +1,39 @@
+entry:
+  timing: next_open
+exit:
+  stage9_exit_enabled: true
+  time_stop_days: 365
+  time_stop_enabled: true
+output:
+  base_dir: output/backtests
+  debug_tail_rows: 200
+  save_single_ticker_files: false
+  signals_dir: output/signals
+run:
+  run_tag_prefix: universe_baseline_v1
+  smoke_test: false
+  smoke_tickers:
+  - AAPL
+  - MSFT
+  - NVDA
+  - JPM
+  - XOM
+signal:
+  entry_stages:
+  - 6
+  - 7
+  require_stage2_history: true
+sizing:
+  account_equity: 10000.0
+  max_scale_ins: 2
+  min_shares: 1
+  overlap_mode: disabled
+  risk_pct_per_trade: 0.01
+spider_gate:
+  enabled: false
+stop:
+  atr_multiplier: 2.0
+  atr_period: 14
+  fixed_stop_pct: 0.06
+  gap_protection: true
+  mode: atr

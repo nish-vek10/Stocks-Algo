@@ -1,0 +1,50 @@
+{
+  "total_trades": 2400,
+  "winning_trades": 841,
+  "losing_trades": 1559,
+  "total_blocked": 41594,
+  "win_rate_pct": 35.04,
+  "avg_win_pct": 63.6853,
+  "avg_loss_pct": -7.5284,
+  "best_trade_pct": 34864.2857,
+  "worst_trade_pct": -93.3333,
+  "expectancy_r": 3.0566,
+  "profit_factor": 1.2317,
+  "gross_wins_usd": 297483.63,
+  "gross_losses_usd": 241531.61,
+  "net_pnl_usd": 55952.02,
+  "net_return_pct": 55.952,
+  "starting_capital": 100000.0,
+  "final_equity": 155952.1,
+  "peak_equity": 155952.1,
+  "trough_equity": 75663.26,
+  "max_drawdown_pct": -32.7155,
+  "sharpe_ratio": 0.8332,
+  "sortino_ratio": 1.7267,
+  "calmar_ratio": 1.7103,
+  "avg_hold_days": 14.8,
+  "max_hold_days": 203,
+  "avg_concurrent_positions": 34.4,
+  "max_concurrent_positions": 58,
+  "trading_days_covered": 873,
+  "stage6_entries": 78,
+  "stage7_entries": 2322,
+  "exit_reasons": {
+    "stage9_exit": 1448,
+    "stop_hit": 785,
+    "stop_gap": 140,
+    "end_of_data": 26,
+    "stage9_exit_eod": 1
+  },
+  "blocked_reasons": {
+    "insufficient_cash": 41594
+  },
+  "config": {
+    "max_positions": null,
+    "sector_cap_pct": null,
+    "gate_enabled": false
+  },
+  "source_run_tag": "universe_baseline_v1_20260224_2310",
+  "generated_at": "2026-02-25T00:17:50.939578",
+  "elapsed_seconds": 5.9
+}

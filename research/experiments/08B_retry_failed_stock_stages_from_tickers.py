@@ -1,14 +1,20 @@
-# research/experiments/08B_retry_failed_stock_stages.py
+# research/experiments/08B_retry_failed_stock_stages_from_tickers.py
 
 """
-08B_retry_failed_stock_stages.py
+08B_retry_failed_stock_stages_from_tickers.py
 
-Retry stock stage classification ONLY for tickers recorded in:
+Retry stock stage classification for tickers recorded in:
   data/cleaned/stocks_daily/stages/_errors.jsonl
+
+Key difference vs old retry:
+- DO NOT trust the logged absolute "file" path (often machine-specific).
+- Instead, rebuild the features path from ticker:
+    data/cleaned/stocks_daily/features/<TICKER>.parquet
 
 Writes:
   data/cleaned/stocks_daily/stages/<TICKER>.parquet   (overwrites only those tickers)
-Logs (separate, so we don't break existing run logs):
+
+Logs (separate; does not touch original run logs):
   data/cleaned/stocks_daily/stages/_retry_progress.jsonl
   data/cleaned/stocks_daily/stages/_retry_errors.jsonl
 """
@@ -33,12 +39,14 @@ if ROOT not in sys.path:
 from stages.stage_classifier import classify_stages
 
 STAGES_DIR = os.path.join(ROOT, "data", "cleaned", "stocks_daily", "stages")
+FEATURES_DIR = os.path.join(ROOT, "data", "cleaned", "stocks_daily", "features")
+
 DEFAULT_ERRORS = os.path.join(STAGES_DIR, "_errors.jsonl")
 
 RETRY_PROGRESS = os.path.join(STAGES_DIR, "_retry_progress.jsonl")
 RETRY_ERRORS = os.path.join(STAGES_DIR, "_retry_errors.jsonl")
 
-# Match your pipeline config (you used this in your test)
+# Match your pipeline config
 CLASSIFY_CFG = {"stage_logic": {"require_breakout_before_inzone": True}}
 
 
@@ -65,7 +73,6 @@ def read_error_records(path: str) -> List[Dict[str, Any]]:
             try:
                 recs.append(json.loads(line))
             except json.JSONDecodeError:
-                # ignore bad lines rather than stopping the whole retry
                 continue
     return recs
 
@@ -73,20 +80,17 @@ def read_error_records(path: str) -> List[Dict[str, Any]]:
 def to_scalar(x: Any) -> Any:
     """
     Convert problematic cell types into scalars or NaN.
-    This is a defensive guard against the "Series -> float" error.
+    Defensive guard against the "Series -> float" error.
     """
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return x
 
-    # common bad types
     if isinstance(x, (pd.Series, np.ndarray, list, tuple)):
         if len(x) == 0:
             return np.nan
-        # take first element
         return x[0]
 
     if isinstance(x, dict):
-        # can't reliably convert dict -> scalar
         return np.nan
 
     return x
@@ -94,42 +98,36 @@ def to_scalar(x: Any) -> Any:
 
 def sanitize_features_df(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Make the DF safe for indicator/stage logic:
+    Make DF safe for stage logic:
       - ensure date column exists
       - drop duplicate dates (keep last)
-      - coerce any non-scalar cells
+      - coerce non-scalar cells
       - coerce numeric columns to numeric
       - sort by date
     """
     if "date" not in df.columns:
         raise ValueError("features df missing required column: 'date'")
 
-    # normalize date
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"]).dt.date.astype("datetime64[ns]")
 
-    # critical: remove duplicate dates
+    # remove duplicate dates
     df = df.sort_values("date")
     df = df.drop_duplicates(subset=["date"], keep="last").reset_index(drop=True)
 
-    # non-scalar cleanup (rare, but it exactly produces Series->float errors)
-    # only apply to non-date cols for speed
+    # non-scalar cleanup
     non_date_cols = [c for c in df.columns if c != "date"]
     for c in non_date_cols:
-        # if column contains lists/series/arrays, sanitize it
-        # cheap heuristic: sample a few non-null values
         s = df[c].dropna()
         if not s.empty:
             sample = s.head(25).tolist()
             if any(isinstance(v, (pd.Series, np.ndarray, list, tuple, dict)) for v in sample):
                 df[c] = df[c].map(to_scalar)
 
-    # coerce numerics where appropriate
-    # (skip clearly non-numeric columns; most of your features should be numeric)
+    # coerce non-numeric -> numeric (others become NaN; acceptable)
     for c in non_date_cols:
         if pd.api.types.is_numeric_dtype(df[c]):
             continue
-        # attempt conversion; if it's truly categorical, it will become NaN (fine)
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
     return df
@@ -138,7 +136,6 @@ def sanitize_features_df(df: pd.DataFrame) -> pd.DataFrame:
 def infer_output_columns() -> Optional[List[str]]:
     """
     Try to read one existing successful stages parquet to match schema.
-    If none found, return None and we just write what classify_stages returns.
     """
     if not os.path.isdir(STAGES_DIR):
         return None
@@ -158,11 +155,9 @@ def write_stage_parquet(ticker: str, out_df: pd.DataFrame, out_cols: Optional[Li
 
     df = out_df.copy()
 
-    # try to add ticker column if schema expects it
     if out_cols and "ticker" in out_cols and "ticker" not in df.columns:
         df["ticker"] = ticker
 
-    # reorder to match existing schema if possible
     if out_cols:
         keep = [c for c in out_cols if c in df.columns]
         extra = [c for c in df.columns if c not in keep]
@@ -172,20 +167,22 @@ def write_stage_parquet(ticker: str, out_df: pd.DataFrame, out_cols: Optional[Li
     return out_path
 
 
+def feature_path_for_ticker(ticker: str) -> str:
+    return os.path.join(FEATURES_DIR, f"{ticker}.parquet")
+
+
 def retry_one(ticker: str, feature_path: str, out_cols: Optional[List[str]]) -> Tuple[bool, str]:
     t0 = time.time()
 
     df = pd.read_parquet(feature_path)
     df = sanitize_features_df(df)
 
-    # classify
     out = classify_stages(df=df, cfg=CLASSIFY_CFG)
 
-    # ensure core cols exist (date/stage/stage_name/stage_reason)
     if "date" not in out.columns or "stage" not in out.columns:
         raise ValueError(f"classify_stages output missing required cols for {ticker}: {out.columns.tolist()}")
 
-    out_path = write_stage_parquet(ticker=ticker, out_df=out, out_cols=out_cols)
+    _ = write_stage_parquet(ticker=ticker, out_df=out, out_cols=out_cols)
 
     elapsed = time.time() - t0
     stages_present = sorted(pd.Series(out["stage"]).dropna().unique().tolist())
@@ -201,24 +198,38 @@ def retry_one(ticker: str, feature_path: str, out_cols: Optional[List[str]]) -> 
 def main(errors_path: str = DEFAULT_ERRORS) -> None:
     recs = read_error_records(errors_path)
 
-    # only take records that have ticker+file (your errors.jsonl has both)
-    items: List[Tuple[str, str]] = []
+    # Collect tickers from error records (ignore machine-specific 'file' paths)
+    tickers: List[str] = []
     seen = set()
 
     for r in recs:
         if r.get("status") != "error":
             continue
-        ticker = r.get("ticker")
-        fpath = r.get("file")
-        if not ticker or not fpath:
+        t = r.get("ticker")
+        if not t:
             continue
+        t = str(t).strip().upper()
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        tickers.append(t)
 
-        # Some logs store absolute Windows paths; keep them as-is if they exist.
-        # If the file isn't found, try making it relative to repo root.
-        if not os.path.exists(fpath):
-            maybe = os.path.join(ROOT, fpath)
-            if os.path.exists(maybe):
-                fpath = maybe
+    if not tickers:
+        print(f"[08B retry] No tickers found in: {errors_path}")
+        return
+
+    out_cols = infer_output_columns()
+
+    print(f"[08B retry] errors_path={errors_path}")
+    print(f"[08B retry] retry_count={len(tickers)}")
+    print(f"[08B retry] features_dir={FEATURES_DIR}")
+    if out_cols:
+        print(f"[08B retry] detected_stage_schema_cols={out_cols}")
+    else:
+        print("[08B retry] could not infer schema (no existing stage parquet found)")
+
+    for ticker in tickers:
+        fpath = feature_path_for_ticker(ticker)
 
         if not os.path.exists(fpath):
             append_jsonl(
@@ -227,41 +238,22 @@ def main(errors_path: str = DEFAULT_ERRORS) -> None:
                     "ts": utc_now_iso(),
                     "status": "error",
                     "ticker": ticker,
-                    "file": fpath,
+                    "feature_file": fpath,
                     "error": f"FileNotFoundError: {fpath}",
                 },
             )
+            print(f"[ERR] ticker={ticker} :: missing features parquet: {fpath}")
             continue
 
-        key = (ticker, fpath)
-        if key in seen:
-            continue
-        seen.add(key)
-        items.append(key)
-
-    if not items:
-        print(f"[08B retry] No valid error records found in: {errors_path}")
-        return
-
-    out_cols = infer_output_columns()
-
-    print(f"[08B retry] errors_path={errors_path}")
-    print(f"[08B retry] retry_count={len(items)}")
-    if out_cols:
-        print(f"[08B retry] detected_stage_schema_cols={out_cols}")
-    else:
-        print("[08B retry] could not infer schema (no existing stage parquet found)")
-
-    for ticker, feature_path in items:
         try:
-            ok, msg = retry_one(ticker, feature_path, out_cols)
+            ok, msg = retry_one(ticker, fpath, out_cols)
             append_jsonl(
                 RETRY_PROGRESS,
                 {
                     "ts": utc_now_iso(),
                     "status": "ok",
                     "ticker": ticker,
-                    "feature_file": feature_path,
+                    "feature_file": fpath,
                     "message": msg,
                 },
             )
@@ -273,7 +265,7 @@ def main(errors_path: str = DEFAULT_ERRORS) -> None:
                     "ts": utc_now_iso(),
                     "status": "error",
                     "ticker": ticker,
-                    "feature_file": feature_path,
+                    "feature_file": fpath,
                     "error": repr(e),
                 },
             )
@@ -283,9 +275,5 @@ def main(errors_path: str = DEFAULT_ERRORS) -> None:
 
 
 if __name__ == "__main__":
-    # You can also pass a custom errors jsonl path:
-    #   python research/experiments/08B_retry_failed_stock_stages.py "path/to/_errors.jsonl"
-    import sys
-
     path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ERRORS
     main(path)

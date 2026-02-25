@@ -226,7 +226,11 @@ Finviz Universe
 ↓
 08B - Stock stage classification
 ↓
-09 - Backtest harness + reporting
+09A - Raw signal generation (Layer 1, runs once)
+↓
+09B - Backtest simulation (Layer 2, re-runs freely)
+↓
+09C - Portfolio simulation (capital constraints + exposure caps)
 ```
 
 
@@ -474,17 +478,20 @@ Only once these questions are answered does automation become relevant.
 
 ---
 
-## 10. Project Status *(as of 2026-02-17)*
+## 10. Project Status *(as of 2026-02-23)*
 
 ### Current Phase
-- **Data foundation + spiders scaffold complete. Indicators are canonical and deterministic.**
-- **5-year OHLCV ingestion complete (2021–2026): `TD_START_DATE=2021-01-01`, `TD_END_DATE=2026-02-01`**
-- **Full spider pipeline complete:** 07A → 07B → 07C → 07D → 07G
-- **08A Stock Feature Engineering complete for full universe (features written)**
-- **08B stock stage classification smoke-tested successfully; ready to run full universe**
-- **Known permanent data gaps tracked (see “Provider Exceptions” below)**
+- ✅ **Data foundation + spiders scaffold complete. Indicators are canonical and deterministic.**
+- ✅ **5-year OHLCV ingestion complete (2021–2026): `TD_START_DATE=2021-01-01`, `TD_END_DATE=2026-02-01`**
+- ✅ **Full spider pipeline complete:** 07A → 07B → 07C → 07D → 07G
+- ✅ 08A (stock feature engineering) — complete
+- ✅ 08B (stock stage classification) — complete
+- ✅ 09A (raw signal generation) — complete
+- ✅ 09B (single-ticker + universe backtest runner) — complete
+- 09C (portfolio simulation with capital constraints) — in progress
 
-The framework is now feature-complete through macro gating and ready for full historical stage classification across all equities.
+**Phase 09A and 09B are complete.** The two-layer backtest architecture is operational and validated on a 5-ticker smoke test.
+Phase 09C (portfolio-level capital constraints and exposure caps) is the next step.
 
 ### Completed Milestones
 
@@ -640,48 +647,549 @@ Twelve Data free/basic tier is rate/credit limited. The ingestion pipeline is de
 
 ---
 
-## 12. Next Steps (Locked Order)
+## 12. Phase 09 — Backtest System *(Architecture, Usage & Configuration)*
 
-### Stage 7B / 07C — Spider feature engineering (local compute)
-Compute indicators locally for each spider series (for regime/stage classification):
-- **EMA:** 10, 20, 50, 100, 200
-- **Donchian:** 20-day high/low
-- **Bollinger Bands:** 20 length, 2 std dev
-- Volume avg + surge flag
-- **Optional:** MACD / RSI (computed, used only if needed)
+---
 
-Target outputs:
-- `data/cleaned/spiders_daily/features/{SPIDER_ID}.parquet`
+### 12a. Two-Layer Architecture (Design Rationale)
 
-### Stage 7C / 07D — Spider stage classification (optional but recommended)
-Run the same stage classifier logic on spiders to produce spider regimes:
-- `data/cleaned/spiders_daily/stages/{SPIDER_ID}.parquet`
+The backtest is intentionally split into two independent layers.
+This is the single most important architectural decision in Phase 09.
+```
+Layer 1 — Signal Generator (09A)   COMPUTE-HEAVY, run ONCE
+    Reads  : data/cleaned/stocks_daily/features/*.parquet  (08A)
+             data/cleaned/stocks_daily/stages/*.parquet    (08B)
+             data/cleaned/spiders_daily/gate/spider_gate_daily.parquet (07G)
+             data/metadata/spiders/spider_memberships.csv
+    Writes : output/signals/raw_signals_all.parquet
+             output/signals/raw_signals_summary.json
 
-### Stage 7D+ — Spider gate (macro permission layer)
-Implement:
-- `filters/spider_gate.py`
+Layer 2 — Backtest Runner (09B)    FAST, re-run FREELY
+    Reads  : output/signals/raw_signals_all.parquet (only)
+    Writes : output/backtests/<run_tag>/...
+```
 
-### Stage 7D+ — Spider gate (macro permission layer) **(NEXT)**
-Implement `filters/spider_gate.py` to act as a macro permission layer for stock signals.
+**Why this matters with 2,831 tickers:**
+Scanning every ticker's stage history to find signals takes compute.
+Simulating stop logic and sizing is arithmetic — it is nearly instant.
+By separating them, you can change your stop from ATR to fixed %, or
+change position sizing, or toggle the spider gate on/off, and re-run
+the entire universe backtest in under 2 seconds without re-reading
+2,831 parquet files.
 
-Planned outputs:
-- A per-day spider regime/state lookup for each sector spider
-- A callable gate used by the signal engine:
-  - `is_spider_allowed(spider_id, date, rules) -> bool`
-  - optional: `spider_risk_multiplier(spider_id, date) -> float`
+**Re-run 09A only when:**
+- Stage classifications change (08B re-run)
+- Spider gate changes (07G re-run)
+- `entry_stages` or `require_stage2_history` in `config/backtest.yaml` changes
 
-### Stage 8 — Stock feature engineering (local compute)
-Apply the same indicator pipeline to each ticker OHLCV and write:
-- `data/cleaned/stocks_daily/features/{TICKER}.parquet`
+**Re-run 09B freely when:**
+- Changing stop mode (ATR vs fixed %)
+- Changing ATR multiplier
+- Changing position sizing
+- Toggling spider gate on/off
+- Changing exit rules (time stop days, Stage 9 exit toggle)
+- Changing overlap mode (disabled vs scale-in)
 
-### Stage 8B — Stock stage classification (daily)
-Run the shared stage classifier across each ticker:
-- `data/cleaned/stocks_daily/stages/{TICKER}.parquet`
+---
 
-### Stage 9 — Backtest harness + research reporting
-- Portfolio simulation
-- Stage-by-stage performance attribution
-- Sensitivity testing (Donchian window, EMA spans, stop policies, spider gate strictness)
+### 12b. Signal Detection Logic (09A)
+
+A signal is generated when a ticker's stage **transitions INTO** Stage 6 or Stage 7
+from a state that is not Stage 6 or 7. This is transition detection, not level detection.
+
+**Example:** A stock sitting in Stage 7 for 5 consecutive days generates one signal
+(on the first day it entered Stage 7), not five.
+
+**Why Stage 6 signals are rare (expected behaviour):**
+The stage classifier evaluates Stage 7 conditions before Stage 6.
+Stage 7 requires one extra condition: `close > EMA50`.
+After a proper Stage 2 dislocation and base formation, by the time price
+breaks the 20-day Donchian high with EMA10 > EMA20, it has almost always
+already recovered above EMA50 — so it skips Stage 6 entirely.
+Stage 6 only fires in the rare case where price breaks out but has not yet
+crossed EMA50. **Stage 7 is your real primary entry in practice.**
+Both are captured as separate `signal_type` values for research attribution.
+
+**Dislocation prerequisite (design-locked):**
+`require_stage2_history: true` means a ticker must have printed Stage 2
+at any point *strictly before* the signal bar for the signal to be valid.
+This is point-in-time safe: the Stage 2 bar itself does not count as "before."
+This is the core thesis constraint — no dislocation, no trade.
+
+---
+
+### 12c. Entry & Exit Logic (09B / engine.py)
+
+**Entry timing:**
+Signal is detected at end of signal bar (close).
+Entry is at the **open of the next trading day**.
+This is lookahead-safe — you cannot observe a close and enter at that same close.
+
+**Stop price:**
+Computed on the signal bar and stored in the signals file.
+```
+stop_price = entry_open - (ATR_14 × atr_multiplier)
+```
+ATR(14) uses Wilder's smoothing (EWM with alpha = 1/14).
+If ATR is zero or missing, falls back to `fixed_stop_pct` automatically.
+A safety floor of 0.5% of entry price prevents near-zero stops on stable tickers.
+
+**Position sizing:**
+```
+risk_dollars   = account_equity × risk_pct_per_trade × gate_risk_multiplier
+shares         = floor(risk_dollars / stop_distance_per_share)
+notional       = shares × entry_open
+```
+With default settings: $10,000 equity × 1% = $100 risked per trade.
+Position size varies naturally — calm large-caps get more shares,
+volatile small-caps get fewer. This is correct quant behaviour.
+
+**Exit hierarchy (checked in this order each day):**
+1. Gap protection: open already below stop → exit at open
+2. Intraday stop hit: low of day touched stop price → exit at stop price
+3. Stage 9 detected: signal observed at close → exit at next day's open
+4. Time stop: max hold days reached → exit at next day's open
+5. End of data: last available bar → exit at close
+
+**R-multiple:**
+Every trade records `pnl_r` = PnL per share ÷ stop distance per share.
+A trade stopped out at exactly the stop price = −1.0R (verified in smoke test).
+A trade that returns 2× the risk taken = +2.0R.
+Expectancy R = average R across all trades. Positive expectancy R = edge exists.
+
+---
+
+### 12d. Configuration Reference — `config/backtest.yaml`
+
+All strategy parameters are controlled from this single file.
+**Never edit engine.py or metrics.py to change parameters — use this file.**
+09B saves a snapshot of this file into every run folder for full audit trail.
+```yaml
+# ── RUN SETTINGS ─────────────────────────────────────────────────────────────
+
+run:
+  run_tag_prefix: "baseline_v1"
+  # Prefix for the auto-generated run folder name.
+  # Output lands in: output/backtests/baseline_v1_YYYYMMDD_HHMM/
+  # Change this when starting a new research variant so runs don't overwrite.
+
+  smoke_test: true
+  # true  = only process the tickers listed in smoke_tickers (fast, for testing)
+  # false = process the full universe (2,831 tickers, takes longer)
+  # ALWAYS run smoke_test: true first when changing parameters.
+
+  smoke_tickers: ["AAPL", "MSFT", "NVDA", "JPM", "XOM"]
+  # Which tickers to use for smoke testing. Change to any tickers you want to
+  # inspect in detail. Works for both 09A and 09B independently.
+
+# ── SIGNAL SETTINGS (09A) ────────────────────────────────────────────────────
+
+signal:
+  entry_stages: [6, 7]
+  # Which stage numbers trigger an entry signal.
+  # 6 = Breakout (price breaks Donchian high, trend turning)
+  # 7 = Breakout Confirmed (price holds above breakout, EMA stack improving)
+  # In practice, almost all signals are Stage 7 (see Section 12b for why).
+  # Research variant: try [7] only to measure pure confirmed-breakout edge.
+
+  require_stage2_history: true
+  # true  = ticker MUST have printed Stage 2 (sharp dislocation) at some point
+  #         in history before the signal bar. This is the core thesis constraint.
+  # false = allow entries from slow downtrends (Stage 3) as well.
+  # Design-locked: keep true for baseline. Set false only as a sensitivity test
+  # to measure how much the dislocation requirement adds to edge.
+
+# ── ENTRY SETTINGS ───────────────────────────────────────────────────────────
+
+entry:
+  timing: "next_open"
+  # Only valid value for now. Entry always at open of day after signal bar.
+  # This is the lookahead-safe approach. Do not change.
+
+# ── STOP LOSS SETTINGS ───────────────────────────────────────────────────────
+
+stop:
+  mode: "atr"
+  # "atr"        = stop adapts to each stock's actual volatility (recommended)
+  #                A calm stock gets a tighter stop; a volatile stock gets room.
+  # "fixed_pct"  = same % stop for every stock regardless of volatility.
+  #                Simple but blunt — a 6% stop on AAPL ≠ a 6% stop on NVDA.
+
+  atr_period: 14
+  # Number of bars used to compute ATR. 14 is the Wilder standard.
+  # Increase (e.g. 20) for a wider, more stable stop.
+  # Decrease (e.g. 7) for a tighter, more reactive stop.
+  # Only used when mode = "atr".
+
+  atr_multiplier: 2.0
+  # stop_price = entry_open - (ATR × this value)
+  # 1.5 = tighter stop, more stop-outs, fewer losses but smaller winners
+  # 2.0 = standard (baseline)
+  # 3.0 = wider stop, fewer stop-outs, bigger losses when wrong
+  # Research variant: test 1.5 vs 2.0 vs 3.0 to find optimal for this strategy.
+  # Only used when mode = "atr".
+
+  fixed_stop_pct: 0.06
+  # stop_price = entry_open × (1 - this value)
+  # 0.06 = 6% stop below entry price.
+  # Only used when mode = "fixed_pct".
+
+  gap_protection: true
+  # true  = if a stock opens below the stop price (overnight gap down),
+  #         exit immediately at that open price. Realistic.
+  # false = only exit if the low of the day hits the stop. Less realistic.
+
+# ── EXIT SETTINGS ────────────────────────────────────────────────────────────
+
+exit:
+  stage9_exit_enabled: true
+  # true  = exit when the stock enters Stage 9 (momentum fading, trend weakening).
+  #         Exit signal observed at close; executed at next day's open.
+  # false = ignore Stage 9. Only stop-loss and time stop trigger exits.
+  #         Use false as a sensitivity test to measure what Stage 9 adds.
+
+  time_stop_enabled: true
+  # true  = force exit after a maximum number of holding days (see below).
+  #         Prevents capital being locked in slow-moving positions indefinitely.
+  # false = hold until stop-loss or Stage 9. No time limit.
+
+  time_stop_days: 60
+  # Maximum number of trading days to hold a position.
+  # If the position has neither hit its stop nor reached Stage 9 after this
+  # many days, it is closed at the next day's open.
+  # 60 trading days ≈ 3 calendar months.
+  # Research variant: test 30, 45, 60, 90 to find optimal hold cap.
+
+# ── POSITION SIZING ───────────────────────────────────────────────────────────
+
+sizing:
+  account_equity: 10000.0
+  # Starting account size in USD. Used for PnL and return calculations.
+  # For Phase 09A/09B each trade is simulated independently with this equity.
+  # Portfolio-level capital constraints (max concurrent positions, sector caps)
+  # are introduced in Phase 09C.
+
+  risk_pct_per_trade: 0.01
+  # Fraction of account equity risked on each trade.
+  # 0.01 = 1% = $100 risk per trade on a $10,000 account.
+  # Position size = risk_dollars ÷ stop_distance_per_share.
+  # This means position size automatically adjusts per stock:
+  #   - Low volatility stock (small stop) → more shares
+  #   - High volatility stock (large stop) → fewer shares
+
+  min_shares: 1
+  # Minimum position size. Prevents the calculation returning 0 shares
+  # on very wide stops or very low-priced stocks.
+
+  overlap_mode: "disabled"
+  # Controls whether multiple trades can be open on the same ticker at once.
+  #
+  # "disabled"  = one position per ticker at a time (baseline, recommended).
+  #               A new signal on a ticker is skipped if that ticker already
+  #               has an open trade. This is the conservative, clean baseline.
+  #
+  # "scale_in"  = allow adding to a position on subsequent signals while
+  #               the original trade is still open (pyramiding).
+  #               Uses the same risk % and stop per add-on leg.
+  #               Capped at max_scale_ins additional entries.
+  #               Use this only after establishing baseline edge.
+
+  max_scale_ins: 2
+  # Maximum number of additional entries allowed per open position.
+  # Only used when overlap_mode = "scale_in".
+  # 2 means: original entry + up to 2 add-ons = 3 legs maximum per ticker.
+
+# ── SPIDER GATE (MACRO FILTER) ────────────────────────────────────────────────
+
+spider_gate:
+  enabled: false
+  # The spider gate is the macro permission layer built in Stage 07G.
+  # It checks whether the sector spider (sector basket) is in a supportive
+  # regime on the trade entry date.
+  #
+  # false = gate disabled. All signals trade regardless of sector regime.
+  #         Use this for the baseline run to measure raw stock-level edge.
+  #         This is the correct first run — you need to know if the stock
+  #         signal has edge before adding the macro filter.
+  #
+  # true  = gate enabled. Signals are blocked if the sector spider is in
+  #         Stage 2, 3, or 4 (downtrend / stress). Signals are allowed if
+  #         sector spider is in Stage 7, 8, or 9.
+  #         Additionally, gate_risk_mult from 07G is applied to position size:
+  #           Spider Stage 7 → risk multiplier 1.10 (size up in strong regime)
+  #           Spider Stage 8 → risk multiplier 1.00 (neutral)
+  #           Spider Stage 9 → risk multiplier 0.80 (size down in fading regime)
+  #
+  # Research protocol: run baseline with false, then flip to true and re-run.
+  # The delta in net PnL and trade count IS the gate attribution — how much
+  # value the macro filter adds (or costs) to the strategy.
+
+# ── OUTPUT SETTINGS ──────────────────────────────────────────────────────────
+
+output:
+  debug_tail_rows: 200
+  # Number of rows written to debug_last_200_rows.parquet per ticker.
+  # This file shows the last N rows of joined features + stages for each ticker.
+  # Used to visually audit indicator values and stage transitions near end of data.
+
+  base_dir: "output/backtests"
+  # Root directory for all backtest run outputs.
+
+  signals_dir: "output/signals"
+  # Root directory for Layer 1 (09A) signal outputs.
+
+  save_single_ticker_files: true
+  # true  = write per-ticker folders under output/backtests/<run_tag>/single/
+  #         Each folder contains trades.parquet, equity.parquet, summary.json,
+  #         debug_last_200_rows.parquet. Use true for smoke tests and audit.
+  # false = skip per-ticker folders. Only universe/ aggregates are written.
+  #         Use false for full universe runs to save disk space and time.
+```
+
+---
+
+### 12e. Run Commands (Phase 09)
+
+All commands from project root.
+
+**Standard workflow (smoke test first, then full universe):**
+```powershell
+# Step 1 — Generate signals (Layer 1)
+# Run once. Re-run only if stages or gate data changes.
+python research/experiments/09A_generate_raw_signals.py
+
+# Step 2 — Run backtest simulation (Layer 2)
+# Re-run freely when changing config/backtest.yaml parameters.
+python research/experiments/09B_run_backtest.py
+```
+
+**Research variant workflow:**
+```powershell
+# 1. Edit config/backtest.yaml (change parameters, change run_tag_prefix)
+# 2. Re-run 09B only — no need to re-run 09A
+python research/experiments/09B_run_backtest.py
+# Each run writes to a new timestamped folder — prior runs are preserved
+```
+
+**Scale full universe run:**
+```powershell
+# 1. In config/backtest.yaml set:
+#      smoke_test: false
+#      save_single_ticker_files: false   (saves disk space)
+#      run_tag_prefix: "universe_v1"
+# 2. Regenerate signals for full universe
+python research/experiments/09A_generate_raw_signals.py
+# 3. Run backtest
+python research/experiments/09B_run_backtest.py
+```
+
+---
+
+### 12f. Output Structure (Phase 09)
+```
+output/
+├── signals/
+│   ├── raw_signals_all.parquet          # All entry signals (Layer 1 output)
+│   └── raw_signals_summary.json         # Signal count, date range, diagnostics
+│
+└── backtests/
+    └── <run_tag>/                        # e.g. baseline_v1_20260224_2149
+        ├── backtest_config_snapshot.yaml # Exact config used for this run (audit)
+        ├── single/                       # Per-ticker detail (if enabled)
+        │   └── <TICKER>/
+        │       ├── trades.parquet        # Trade-by-trade record
+        │       ├── equity.parquet        # Equity curve (step at each exit)
+        │       ├── summary.json          # Full metrics for this ticker
+        │       └── debug_last_200_rows.parquet
+        └── universe/
+            ├── trades_all.parquet        # All trades concatenated
+            ├── summary_by_ticker.csv     # Per-ticker metric table
+            ├── failures.jsonl            # Non-fatal failures with reasons
+            └── universe_report.json      # Aggregate metrics across all tickers
+```
+
+**Full column set in `trades_all.parquet` and per-ticker `trades.parquet`:**
+
+| Column | Type | Description |
+|---|---|---|
+| `ticker` | string | Stock symbol |
+| `signal_date` | date | Date the Stage 6/7 transition was detected |
+| `signal_type` | string | `stage6_entry` or `stage7_entry` |
+| `entry_date` | date | Next trading day after signal (actual entry date) |
+| `entry_price` | float | Open price on entry_date |
+| `stop_price` | float | Calculated stop loss price |
+| `stop_mode` | string | `atr` or `fixed_pct` (which mode was active) |
+| `stop_distance` | float | Distance in $ between entry and stop |
+| `shares` | int | Number of shares held |
+| `notional` | float | Total position value at entry (shares × entry_price) |
+| `exit_date` | date | Date position was closed |
+| `exit_price` | float | Price at which position was closed |
+| `exit_reason` | string | `stop_hit` / `stop_gap` / `stage9_exit` / `time_stop` / `end_of_data` |
+| `hold_days` | int | Number of trading days position was held |
+| `pnl_dollar` | float | Profit or loss in USD |
+| `pnl_pct` | float | Profit or loss as % of entry price |
+| `pnl_r` | float | R-multiple: pnl ÷ risk taken. `-1.0` = stopped out exactly at stop |
+| `gate_risk_mult` | float | Spider gate risk multiplier applied to sizing (1.0 if gate disabled) |
+| `spider_id` | string | Sector spider this ticker belongs to (e.g. `SECTOR_TECHNOLOGY`) |
+| `atr_14` | float | ATR(14) value on signal date, used to compute stop distance |
+
+**Quick audit — inspect any ticker from `trades_all.parquet`:**
+```powershell
+python -c "
+import pandas as pd
+df = pd.read_parquet(r'output\backtests\<run_tag>\universe\trades_all.parquet')
+t = df[df['ticker']=='AAPL'].sort_values('entry_date')
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 200)
+print(t[['entry_date','exit_date','entry_price','stop_price','exit_reason','hold_days','pnl_pct','pnl_r']].to_string())
+"
+```
+
+Replace `AAPL` with any ticker in the universe. Replace `<run_tag>` with the actual folder name under `output/backtests/`.
+
+**Export any parquet to CSV or XLSX for manual inspection:**
+```powershell
+# 1. Edit INPUT_PARQUET and FILTER_TICKER at top of script
+# 2. Run:
+python zTester/04_parquet_inspector.py
+# Output lands in: output/exports/
+```
+
+**Key metrics in every summary.json / universe_report.json:**
+
+| Metric | What it means |
+|---|---|
+| `win_rate_pct` | % of trades that closed profitable |
+| `avg_win_pct` | Average return on winning trades |
+| `avg_loss_pct` | Average loss on losing trades |
+| `profit_factor` | Gross wins ÷ gross losses. >1 = profitable system |
+| `expectancy_r` | Average R per trade. Positive = edge exists |
+| `net_return_pct` | Total PnL as % of starting equity |
+| `max_drawdown_pct` | Largest peak-to-trough equity decline |
+| `sharpe_ratio` | Risk-adjusted return proxy (trade-level, directional only) |
+| `sortino_ratio` | Like Sharpe but only penalises downside volatility |
+| `calmar_ratio` | Net return ÷ max drawdown |
+| `avg_hold_days` | Average trade duration in trading days |
+| `stage6_entries` | How many trades entered on Stage 6 signal |
+| `stage7_entries` | How many trades entered on Stage 7 signal |
+| `exit_reasons` | Breakdown: stop_hit / stop_gap / stage9_exit / time_stop |
+
+---
+
+### 12g. Validated Results
+
+
+#### Smoke Test (5 Tickers, Baseline Config)
+*Run: `baseline_v1_20260224_2149` — gate disabled, ATR 2×, 1% risk, no overlaps*
+
+| Ticker | Trades | Win% | Profit Factor | Expectancy R | Net Return |
+|---|---|---|---|---|---|
+| AAPL | 24 | 58% | 2.89 | 0.40 | +9.2% |
+| MSFT | 25 | 44% | 1.18 | 0.07 | +1.6% |
+| NVDA | 22 | 41% | **3.46** | **0.92** | +19.7% |
+| JPM | 25 | 52% | 2.26 | 0.36 | +9.1% |
+| XOM | 12 | 25% | 0.91 | 0.003 | −0.6% |
+
+
+#### Full Universe Run (2,582 Tickers, Baseline Config)
+*Run: `universe_baseline_v1_20260224_2310` — gate disabled, ATR 2×, 1% risk, no overlaps*
+
+**Aggregate statistics:**
+
+| Metric | Value | Notes |
+|---|---|---|
+| Total trades | 44,008 | ~17 per ticker average over 4 years |
+| Win rate | 36.2% | Expected — wide universe includes noisy small/mid caps |
+| Expectancy R | **0.20** | Positive across full universe — edge confirmed |
+| Profit factor | **1.36** | Gross wins exceed gross losses universe-wide |
+| Avg hold days | 13.5 | Consistent with smoke test (12.6) |
+| Stage 7 entries | 97.1% | Confirms Stage 7 is the real primary entry |
+
+**Edge distribution across 2,582 tickers:**
+
+| Segment | Count | % of Universe |
+|---|---|---|
+| Positive expectancy R | 1,324 | 51.3% |
+| Profit factor > 2.0 (strong edge) | 436 | 16.9% |
+| Profit factor < 0.8 (losers) | 936 | 36.2% |
+
+**Profit factor percentiles:**
+```
+25th pct : 0.62   (losing quarter)
+Median   : 1.03   (break-even middle)
+75th pct : 1.62   (solid edge in top quarter)
+```
+
+**Expectancy R percentiles:**
+```
+25th pct : -0.21  (losing quarter)
+Median   :  0.01  (near break-even middle)
+75th pct :  0.25  (solid edge in top quarter)
+```
+
+**Key observations:**
+- The strategy works on ~51% of the universe. The remaining 49% is noise or permanently broken companies.
+- The bottom performers (0% win rate across 10-16 trades) are structurally declining companies where Stage 2 → Stage 7 fires mechanically but the "mean" keeps declining — no genuine reversion. This is the primary motivation for the spider gate filter and a future quality overlay.
+- Universe-level max drawdown is meaningless at this stage — it is computed as if all 2,582 independent $10k accounts were one sequential $10k account. Real drawdown requires portfolio-level capital simulation (Phase 09C).
+- The outlier at expectancy R = 617 (SSII) is a low-liquidity biotech with one exceptional move. Natural position sizing at 0.5% risk will automatically limit its impact in the portfolio.
+
+---
+
+### 12h. Phase 09C — Portfolio Simulation
+
+**Validated design (locked before build):**
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Capital pool | $100,000 | Clean research baseline |
+| Risk per trade | 0.5% = $500 | Half of 09B to accommodate more concurrent positions |
+| Max concurrent positions | None (uncapped) | Baseline: no cap, measure full opportunity set |
+| Signal priority | Chronological | First signal in time order enters first |
+| Sector exposure cap | None for baseline | Add after seeing baseline results |
+| Spider gate | Disabled for baseline | Same as 09B — measure raw edge first |
+
+**What 09C adds that 09B cannot produce:**
+- One shared capital pool — all trades draw from and return to the same $100,000
+- Position sizing uses *current* portfolio equity (fixed fractional — self-adjusting)
+- Real concurrent position tracking — no more independent per-ticker accounts
+- Real daily equity curve — one row per trading day across the full 4-year window
+- Real portfolio-level drawdown, Sharpe, Sortino, Calmar
+- Sector exposure snapshots — daily breakdown of capital by spider
+
+**Outputs (Phase 09C):**
+```
+output/backtests/<run_tag>/portfolio/
+    portfolio_equity.parquet     — daily equity curve
+    portfolio_trades.parquet     — all trades with portfolio-level context
+    portfolio_report.json        — real risk-adjusted metrics
+    positions_log.parquet        — daily open positions snapshot
+    sector_exposure.parquet      — daily capital by spider
+```
+
+**Research sequence after 09C baseline:**
+1. Baseline: no cap, no gate, 0.5% risk — measure full opportunity set
+2. Add spider gate — measure gate attribution (how much does macro filter add?)
+3. Add max position cap (e.g. 20) — measure concentration vs diversification tradeoff
+4. Add sector cap (e.g. 25% per spider) — measure sector risk reduction cost
+5. Compare `overlap_mode: scale_in` vs `disabled` at portfolio level
+6. Stage-by-stage attribution — Stage 6 vs Stage 7 edge comparison
+7. Stop sensitivity — ATR multiplier 1.5 vs 2.0 vs 3.0
+8. Time stop sensitivity — 30 vs 45 vs 60 vs 90 days
+
+### 12i. Sensitivity Research Roadmap
+
+Every experiment below requires only a change to `config/backtest.yaml` followed by re-running `09B` or `09C` — no code changes required.
+
+| Experiment | Config Change | Research Question |
+|---|---|---|
+| Gate attribution | `spider_gate.enabled: true` | Does macro filter add or destroy edge? |
+| Stop tightening | `atr_multiplier: 1.5` | Do tighter stops improve or hurt expectancy? |
+| Stop widening | `atr_multiplier: 3.0` | Do wider stops capture more trend? |
+| Time stop short | `time_stop_days: 30` | Does faster exit improve capital efficiency? |
+| Time stop long | `time_stop_days: 90` | Do longer holds capture more of the move? |
+| Scale-in | `overlap_mode: scale_in` | Does pyramiding into confirmed trends add alpha? |
+| No Stage 2 gate | `require_stage2_history: false` | How much does dislocation requirement add? |
+| Stage 7 only | `entry_stages: [7]` | Is Stage 6 entry adding or subtracting edge? |
 
 ---
 

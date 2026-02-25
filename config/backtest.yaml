@@ -1,0 +1,87 @@
+# Path: config/backtest.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# ALGO-STOCKS Phase 09 — Backtest Configuration
+# All strategy parameters live here. Change these without touching any scripts.
+# ─────────────────────────────────────────────────────────────────────────────
+
+run:
+  run_tag_prefix: "universe_baseline_v1"        # prepended to auto-generated timestamp tag
+  smoke_test: false                      # true = only process smoke_tickers
+  smoke_tickers: ["AAPL", "MSFT", "NVDA", "JPM", "XOM"]
+
+signal:
+  entry_stages: [6, 7]                  # stages that trigger entry signals
+  require_stage2_history: true          # dislocation prerequisite (design-locked)
+
+entry:
+  timing: "next_open"                   # always enter at open of day after signal
+
+stop:
+  mode: "atr"                           # "atr" | "fixed_pct"
+  atr_period: 14                        # ATR lookback (Wilder smoothing)
+  atr_multiplier: 2.0                   # stop = entry_open - (ATR * multiplier)
+  fixed_stop_pct: 0.06                  # used only when mode = "fixed_pct"
+  gap_protection: true                  # if open gaps below stop, exit at open
+
+exit:
+  stage9_exit_enabled: true             # exit when stage 9 detected (next open)
+  time_stop_enabled: true               # max hold cap
+  time_stop_days: 365                    # trading days before forced exit
+
+sizing:
+  account_equity: 10000.0               # starting account size in USD
+  risk_pct_per_trade: 0.01              # 1% of equity risked per trade = $100
+  min_shares: 1                         # floor on position size
+
+  # Scale-in mode: allow re-entry on same ticker while a trade is open
+  # This simulates pyramiding — adding to a confirmed trend
+  # "disabled"   = one position per ticker at a time (baseline, default)
+  # "scale_in"   = allow up to max_scale_ins additional entries per open trade
+  overlap_mode: "disabled"
+  max_scale_ins: 2                      # max add-ons per open position (scale_in only)
+
+spider_gate:
+  enabled: false                        # false = raw edge test (no macro filter)
+  # When true: gate_allowed and gate_risk_mult from 07G are applied
+  # Flip to true after baseline run to measure gate attribution
+
+output:
+  debug_tail_rows: 200                  # rows in debug_last_200_rows.parquet
+  base_dir: "output/backtests"          # root for all backtest run outputs
+  signals_dir: "output/signals"         # root for Layer 1 signal outputs
+  save_single_ticker_files: false        # false = skip per-ticker folders (faster for full universe)
+
+portfolio:
+  # ── Source: which 09B universe run to build the portfolio from ─────────────
+  source_run_tag: "universe_baseline_v1_20260224_2310"
+  # Must match the exact folder name under output/backtests/
+  # Change this when we run 09B with different parameters and want to
+  # portfolio-simulate those results.
+
+  # ── Capital ────────────────────────────────────────────────────────────────
+  capital: 2000000.0                   # starting portfolio capital in USD
+
+  # ── Position sizing ────────────────────────────────────────────────────────
+  risk_pct_per_trade: 0.0001           # 0.5% of current equity per trade = $500
+  min_shares: 1                       # minimum position size floor
+
+  # ── Capacity constraints ───────────────────────────────────────────────────
+  max_positions: null                 # null = uncapped (baseline: full opportunity set)
+  sector_cap_pct: null               # null = no sector cap (baseline)
+  # Set max_positions: 20 and sector_cap_pct: 0.25 for constrained research variant
+
+  # ── Signal priority (when max_positions cap is active) ────────────────────
+  signal_priority: "chronological"   # "chronological" = first signal in time wins
+  # Only matters when max_positions is not null
+
+  # ── Output controls ────────────────────────────────────────────────────────
+  save_positions_log: false
+  # true  = write positions_log.parquet (one row per open position per event)
+  # false = skip it (recommended for uncapped runs with large capital — can
+  #         grow to millions of rows and cause MemoryError)
+  # Set true only when you need to inspect daily open positions in detail.
+
+  # ── Gate ───────────────────────────────────────────────────────────────────
+  gate_enabled: false                 # reads gate_allowed from trades_all.parquet
+  # Flip to true to apply spider gate at portfolio level
+

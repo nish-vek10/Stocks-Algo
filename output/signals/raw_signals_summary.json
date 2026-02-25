@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-02-24T23:03:45.940500",
+  "elapsed_seconds": 35.1,
+  "smoke_test": false,
+  "tickers_requested": 2831,
+  "tickers_with_signals": 2582,
+  "total_signals": 89634,
+  "stage6_signals": 1364,
+  "stage7_signals": 88270,
+  "config": {
+    "entry_stages": [
+      6,
+      7
+    ],
+    "require_stage2": true,
+    "atr_period": 14
+  },
+  "signal_date_range": {
+    "first": "2022-01-31",
+    "last": "2026-01-29"
+  },
+  "skipped_missing_files": [],
+  "skipped_no_signals": 249,
+  "no_signal_tickers_file": "C:\\Users\\ravil\\PycharmProjects\\ALGO-Stocks\\output\\signals\\no_signal_tickers.json",
+  "errors": []
+}
