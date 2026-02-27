@@ -1,0 +1,258 @@
+{
+  "generated_at": "2026-02-26T10:04:43.041817",
+  "source_run_tag": "universe_baseline_v1_20260224_2310",
+  "methodology": "virtual_parallel_accounts",
+  "virtual_acct": 10000.0,
+  "use_filtered": true,
+  "elapsed_seconds": 0.3,
+  "metrics": {
+    "net_pnl_usd": 1278183.01,
+    "gross_wins_usd": 2288838.06,
+    "gross_losses_usd": 1010655.05,
+    "ann_ret_on_avg_deployed_pct": 9.82,
+    "ret_on_avg_deployed_pct": 40.65,
+    "cagr_total_base_pct": 8.59,
+    "net_return_total_base_pct": 40.66,
+    "start_equity": 3143994.25,
+    "final_equity": 4422277.02,
+    "max_drawdown_pct": -1.85,
+    "max_dd_duration_days": 212,
+    "recovery_days": 68,
+    "avg_drawdown_pct": -0.48,
+    "ann_volatility_pct": 8.57,
+    "pain_index": 0.3477,
+    "var_95_pct": -0.0353,
+    "cvar_95_pct": -0.1252,
+    "sharpe_ratio": 1.0011,
+    "sortino_ratio": 8.12,
+    "calmar_ratio": 5.3093,
+    "omega_ratio": 4.2542,
+    "total_trades": 21782,
+    "winning_trades": 9385,
+    "losing_trades": 12397,
+    "win_rate_pct": 43.09,
+    "profit_factor": 2.2647,
+    "expectancy_r": 0.6348,
+    "payoff_ratio": 3.3393,
+    "avg_win_pct": 6.74,
+    "avg_loss_pct": -4.46,
+    "avg_win_r": 2.4374,
+    "avg_loss_r": -0.7299,
+    "best_trade_pct": 34864.29,
+    "worst_trade_pct": -84.04,
+    "avg_hold_days": 14.4,
+    "max_hold_days": 220,
+    "max_consec_wins": 18,
+    "max_consec_losses": 64,
+    "stage6_entries": 629,
+    "stage7_entries": 21153,
+    "top5_trades": [
+      {
+        "ticker": "SSII",
+        "entry_date": "2022-05-05 00:00:00",
+        "exit_date": "2023-01-23 00:00:00",
+        "pnl_pct": 34864.29,
+        "pnl_r": 6783.7857,
+        "exit_reason": "stage9_exit"
+      },
+      {
+        "ticker": "WOLF",
+        "entry_date": "2025-09-10 00:00:00",
+        "exit_date": "2025-09-30 00:00:00",
+        "pnl_pct": 1637.95,
+        "pnl_r": 79.1384,
+        "exit_reason": "stage9_exit"
+      },
+      {
+        "ticker": "ASST",
+        "entry_date": "2025-05-05 00:00:00",
+        "exit_date": "2025-05-29 00:00:00",
+        "pnl_pct": 1073.49,
+        "pnl_r": 56.5708,
+        "exit_reason": "stage9_exit"
+      },
+      {
+        "ticker": "VIA",
+        "entry_date": "2023-11-16 00:00:00",
+        "exit_date": "2025-10-02 00:00:00",
+        "pnl_pct": 460.41,
+        "pnl_r": 35.4807,
+        "exit_reason": "stage9_exit"
+      },
+      {
+        "ticker": "ABTC",
+        "entry_date": "2025-04-25 00:00:00",
+        "exit_date": "2025-07-21 00:00:00",
+        "pnl_pct": 416.13,
+        "pnl_r": 19.2673,
+        "exit_reason": "stage9_exit"
+      }
+    ],
+    "bot5_trades": [
+      {
+        "ticker": "AMLX",
+        "entry_date": "2024-02-23 00:00:00",
+        "exit_date": "2024-03-08 00:00:00",
+        "pnl_pct": -84.04,
+        "pnl_r": -7.8759,
+        "exit_reason": "stop_gap"
+      },
+      {
+        "ticker": "CD",
+        "entry_date": "2025-07-21 00:00:00",
+        "exit_date": "2025-07-22 00:00:00",
+        "pnl_pct": -59.45,
+        "pnl_r": -3.7546,
+        "exit_reason": "stop_gap"
+      },
+      {
+        "ticker": "GYRE",
+        "entry_date": "2023-01-09 00:00:00",
+        "exit_date": "2023-01-13 00:00:00",
+        "pnl_pct": -56.25,
+        "pnl_r": -4.8117,
+        "exit_reason": "stop_gap"
+      },
+      {
+        "ticker": "SSII",
+        "entry_date": "2023-04-18 00:00:00",
+        "exit_date": "2023-04-28 00:00:00",
+        "pnl_pct": -55.56,
+        "pnl_r": -2.4659,
+        "exit_reason": "stage9_exit"
+      },
+      {
+        "ticker": "KOD",
+        "entry_date": "2023-05-17 00:00:00",
+        "exit_date": "2023-07-24 00:00:00",
+        "pnl_pct": -47.94,
+        "pnl_r": -3.6727,
+        "exit_reason": "stop_gap"
+      }
+    ],
+    "pct_positive_months": 61.7,
+    "pct_positive_quarters": 75.0,
+    "pct_positive_years": 100.0,
+    "best_month_pct": 17.07,
+    "worst_month_pct": -0.86,
+    "avg_month_pct": 0.76,
+    "avg_open_positions": 314.4,
+    "max_open_positions": 871,
+    "avg_deployed_capital": 3143994.25,
+    "peak_deployed_capital": 8710000.0,
+    "avg_utilisation_pct": 100.0,
+    "peak_utilisation_pct": 277.04,
+    "virtual_acct_per_trade": 10000.0,
+    "total_virtual_capital": 3143994.25,
+    "tickers_included": 1251,
+    "first_entry_date": "2022-02-01",
+    "last_exit_date": "2026-01-30",
+    "exit_reasons": {
+      "stage9_exit": {
+        "count": 15726,
+        "pct": 72.2
+      },
+      "stop_hit": {
+        "count": 4823,
+        "pct": 22.1
+      },
+      "stop_gap": {
+        "count": 876,
+        "pct": 4.0
+      },
+      "end_of_data": {
+        "count": 308,
+        "pct": 1.4
+      },
+      "stage9_exit_eod": {
+        "count": 49,
+        "pct": 0.2
+      }
+    }
+  },
+  "config_snapshot": {
+    "run": {
+      "run_tag_prefix": "universe_baseline_v1",
+      "smoke_test": false,
+      "smoke_tickers": [
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "JPM",
+        "XOM"
+      ]
+    },
+    "signal": {
+      "entry_stages": [
+        6,
+        7
+      ],
+      "require_stage2_history": true
+    },
+    "entry": {
+      "timing": "next_open"
+    },
+    "stop": {
+      "mode": "atr",
+      "atr_period": 14,
+      "atr_multiplier": 2.0,
+      "fixed_stop_pct": 0.06,
+      "gap_protection": true
+    },
+    "exit": {
+      "stage9_exit_enabled": true,
+      "time_stop_enabled": true,
+      "time_stop_days": 365
+    },
+    "sizing": {
+      "account_equity": 10000.0,
+      "risk_pct_per_trade": 0.01,
+      "min_shares": 1,
+      "overlap_mode": "scale_in",
+      "max_scale_ins": 2
+    },
+    "spider_gate": {
+      "enabled": false
+    },
+    "output": {
+      "debug_tail_rows": 200,
+      "base_dir": "output/backtests",
+      "signals_dir": "output/signals",
+      "save_single_ticker_files": false
+    },
+    "portfolio": {
+      "source_run_tag": "universe_baseline_v1_20260224_2310",
+      "capital": 10000.0,
+      "risk_pct_per_trade": 0.01,
+      "min_shares": 1,
+      "max_positions": null,
+      "sector_cap_pct": null,
+      "signal_priority": "chronological",
+      "save_positions_log": false,
+      "gate_enabled": false
+    },
+    "filter": {
+      "min_trades": 5,
+      "min_profit_factor": 1.0,
+      "min_expectancy_r": 0.0,
+      "max_drawdown_pct": -60.0,
+      "min_win_rate_pct": 0.0
+    },
+    "batches": {
+      "use_filtered_tickers": true,
+      "source_run_tag": "universe_baseline_v1_20260224_2310",
+      "windows": [
+        {
+          "name": "Batch 1 \u2014 2022 to 2023",
+          "start": "2022-01-01",
+          "end": "2023-12-31"
+        },
+        {
+          "name": "Batch 2 \u2014 2024 to 2026",
+          "start": "2024-01-01",
+          "end": "2026-12-31"
+        }
+      ]
+    }
+  }
+}

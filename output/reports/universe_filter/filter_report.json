@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-02-25T17:20:59.728101",
+  "source_run_tag": "universe_baseline_v1_20260224_2310",
+  "elapsed_seconds": 5.5,
+  "total_tickers": 2582,
+  "passed": 1251,
+  "rejected": 1331,
+  "pass_rate_pct": 48.45,
+  "thresholds": {
+    "min_trades": 5,
+    "min_profit_factor": 1.0,
+    "min_expectancy_r": 0.0,
+    "max_drawdown_pct": -60.0,
+    "min_win_rate_pct": 0.0
+  },
+  "sector_breakdown": [
+    {
+      "sector": "Financials",
+      "tickers": 320,
+      "avg_pf": 1.9250090624999998,
+      "avg_exp_r": 0.3322715625
+    },
+    {
+      "sector": "Healthcare",
+      "tickers": 214,
+      "avg_pf": 4.940257943925234,
+      "avg_exp_r": 3.336713551401869
+    },
+    {
+      "sector": "Industrials",
+      "tickers": 193,
+      "avg_pf": 2.0219202072538858,
+      "avg_exp_r": 0.341660103626943
+    },
+    {
+      "sector": "Technology",
+      "tickers": 180,
+      "avg_pf": 2.083197222222222,
+      "avg_exp_r": 0.4198877777777778
+    },
+    {
+      "sector": "Consumer Discretionary",
+      "tickers": 122,
+      "avg_pf": 1.8482918032786886,
+      "avg_exp_r": 0.28376721311475406
+    },
+    {
+      "sector": "Materials",
+      "tickers": 53,
+      "avg_pf": 2.201424528301887,
+      "avg_exp_r": 0.3822660377358491
+    },
+    {
+      "sector": "Consumer Staples",
+      "tickers": 52,
+      "avg_pf": 2.2596307692307693,
+      "avg_exp_r": 0.39376923076923076
+    },
+    {
+      "sector": "Energy",
+      "tickers": 50,
+      "avg_pf": 2.0110200000000003,
+      "avg_exp_r": 0.318948
+    },
+    {
+      "sector": "Communication Services",
+      "tickers": 42,
+      "avg_pf": 1.790211904761905,
+      "avg_exp_r": 0.329197619047619
+    },
+    {
+      "sector": "Utilities",
+      "tickers": 25,
+      "avg_pf": 1.8320319999999999,
+      "avg_exp_r": 0.268096
+    }
+  ],
+  "rejection_reasons": {
+    "too_few_trades(1)": 14,
+    "too_few_trades(2)": 13,
+    "too_few_trades(4)": 11,
+    "too_few_trades(1); low_profit_factor(0.00); negative_expectancy(-1.000)": 10,
+    "too_few_trades(3)": 9,
+    "low_profit_factor(0.95)": 5,
+    "low_profit_factor(0.99)": 5,
+    "negative_expectancy(-0.006)": 4,
+    "low_profit_factor(0.98)": 4,
+    "negative_expectancy(-0.014)": 4,
+    "low_profit_factor(0.97)": 4,
+    "negative_expectancy(-0.009)": 3,
+    "too_few_trades(2); low_profit_factor(0.00); negative_expectancy(-1.000)": 3,
+    "low_profit_factor(0.96)": 3,
+    "too_few_trades(3); low_profit_factor(0.00); negative_expectancy(-1.000)": 3,
+    "negative_expectancy(-0.015)": 3,
+    "low_profit_factor(0.97); negative_expectancy(-0.035)": 3,
+    "low_profit_factor(0.87); negative_expectancy(-0.050)": 3,
+    "low_profit_factor(0.95); negative_expectancy(-0.022)": 2,
+    "low_profit_factor(0.33); negative_expectancy(-0.335)": 2
+  }
+}
