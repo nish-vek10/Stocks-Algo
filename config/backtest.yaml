@@ -37,7 +37,7 @@ sizing:
   # This simulates pyramiding — adding to a confirmed trend
   # "disabled"   = one position per ticker at a time (baseline, default)
   # "scale_in"   = allow up to max_scale_ins additional entries per open trade
-  overlap_mode: "disabled"
+  overlap_mode: "scale_in"
   max_scale_ins: 2                      # max add-ons per open position (scale_in only)
 
 spider_gate:
@@ -59,14 +59,14 @@ portfolio:
   # portfolio-simulate those results.
 
   # ── Capital ────────────────────────────────────────────────────────────────
-  capital: 2000000.0                   # starting portfolio capital in USD
+  capital: 10000.0                   # starting portfolio capital in USD
 
   # ── Position sizing ────────────────────────────────────────────────────────
-  risk_pct_per_trade: 0.0001           # 0.5% of current equity per trade = $500
+  risk_pct_per_trade: 0.01           # 0.5% of current equity per trade = $500
   min_shares: 1                       # minimum position size floor
 
   # ── Capacity constraints ───────────────────────────────────────────────────
-  max_positions: null                 # null = uncapped (baseline: full opportunity set)
+  max_positions: 200                 # null = uncapped (baseline: full opportunity set)
   sector_cap_pct: null               # null = no sector cap (baseline)
   # Set max_positions: 20 and sector_cap_pct: 0.25 for constrained research variant
 
@@ -85,3 +85,40 @@ portfolio:
   gate_enabled: false                 # reads gate_allowed from trades_all.parquet
   # Flip to true to apply spider gate at portfolio level
 
+# ── UNIVERSE FILTER (09D) ─────────────────────────────────────────────────────
+filter:
+  # Minimum trades required — tickers with fewer are statistically unreliable
+  min_trades: 5
+
+  # Minimum profit factor — must generate more gross wins than losses
+  min_profit_factor: 1.0
+
+  # Minimum expectancy R — must have positive expected R per trade
+  min_expectancy_r: 0.0
+
+  # Maximum drawdown allowed — reject deeply broken tickers
+  max_drawdown_pct: -60.0
+
+  # Minimum win rate (optional — set 0.0 to disable)
+  min_win_rate_pct: 0.0
+
+# ── BATCH ANALYSIS (09E) ──────────────────────────────────────────────────────
+batches:
+  # Entry-date attribution: each trade belongs to the batch it ENTERED in.
+  # Trades are never force-closed. A trade entered in batch 1 that exits in
+  # batch 2 is counted in batch 1. This is the standard fund reporting approach.
+
+  use_filtered_tickers: true
+  # true  = only include tickers that passed the 09D filter
+  # false = use full universe
+
+  source_run_tag: "universe_baseline_v1_20260224_2310"
+  # Must match the 09B run folder containing trades_all.parquet
+
+  windows:
+    - name: "Batch 1 — 2022 to 2023"
+      start: "2022-01-01"
+      end:   "2023-12-31"
+    - name: "Batch 2 — 2024 to 2026"
+      start: "2024-01-01"
+      end:   "2026-12-31"
