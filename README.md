@@ -1,5 +1,40 @@
-# ALGO-STOCKS  
+# STOCKS ALGO 
 ### Long-Only, Mean-Reversion Equity Research & Backtesting Framework
+
+---
+
+## Table of Contents
+
+| # | Section |
+|---|---|
+| 1 | [Project Overview](#1-project-overview) |
+| 2 | [Core Strategy Philosophy](#2-core-strategy-philosophy) |
+| 3 | [Data Sources](#3-data-sources-research-layer) |
+| 4 | [Market Stages — State Machine](#4-market-stages-state-machine) |
+| 5 | [Sector Spiders — Macro Filter](#5-sector-spiders-macro-filter) |
+| 6 | [Research-First Design](#6-research-first-design) |
+| 7a | [End-to-End Pipeline](#7a-end-to-end-data--research-pipeline) |
+| 7b | [System Architecture Diagram](#7b-system-architecture-diagram) |
+| 7c | [Project Structure](#7c-project-structure) |
+| 8 | [Configuration-Driven Design](#8-configuration-driven-design) |
+| 9 | [Intended Outcomes](#9-intended-outcomes) |
+| 10 | [Project Status](#10-project-status-as-of-2026-02-23) |
+| 11a | [Design Lock-In](#11a-design-lock-in-important) |
+| 11b | [Operational Notes](#11b-operational-notes-important) |
+| 12 | [Phase 09 — Backtest System](#12-phase-09--backtest-system-architecture-usage--configuration) |
+| 12a | [Two-Layer Architecture](#12a-two-layer-architecture-design-rationale) |
+| 12b | [Signal Detection Logic](#12b-signal-detection-logic-09a) |
+| 12c | [Entry & Exit Logic](#12c-entry--exit-logic-09b--enginepy) |
+| 12d | [Configuration Reference](#12d-configuration-reference--configbacktestyaml) |
+| 12e | [Run Commands](#12e-run-commands-phase-09) |
+| 12f | [Output Structure](#12f-output-structure-phase-09) |
+| 12g | [Validated Results](#12g-validated-results) |
+| 12h | [Phase 09C — Portfolio Simulation](#12h-phase-09c--portfolio-simulation) |
+| 12i | [Sensitivity Research Roadmap](#12i-sensitivity-research-roadmap) |
+| 12j | [Phase 09D — Universe Filter](#12j-phase-09d--universe-filter--enriched-report) |
+| 12k | [Phase 09E — Batched Investor Report](#12k-phase-09e--time-batched-investor-report) |
+| 12l | [Scenarios Testing Guide](#12l-scenarios-testing-guide) |
+| 13 | [Historical Window Refresh Protocol](#13-historical-window-refresh-protocol-20212026) |
 
 ---
 
@@ -207,7 +242,7 @@ The architecture is strictly layered and restart-safe.
 
 ### Full Pipeline Flow
 
-```yaml
+```
 Finviz Universe
 ↓
 06 - TwelveData OHLCV ingestion
@@ -231,8 +266,11 @@ Finviz Universe
 09B - Backtest simulation (Layer 2, re-runs freely)
 ↓
 09C - Portfolio simulation (capital constraints + exposure caps)
+↓
+09D - Universe filter + sector enrichment (identify investable subset)
+↓
+09E - Time-batched investor report (Batch 1: 2022–2023, Batch 2: 2024–2026)
 ```
-
 
 ---
 
@@ -488,10 +526,11 @@ Only once these questions are answered does automation become relevant.
 - ✅ 08B (stock stage classification) — complete
 - ✅ 09A (raw signal generation) — complete
 - ✅ 09B (single-ticker + universe backtest runner) — complete
-- 09C (portfolio simulation with capital constraints) — in progress
+- ✅ 09C (portfolio simulation with capital constraints) — complete
+- ✅ 09D (universe filter + enriched sector report) — complete
+- ✅ 09E (time-batched investor report + Excel) — complete
 
-**Phase 09A and 09B are complete.** The two-layer backtest architecture is operational and validated on a 5-ticker smoke test.
-Phase 09C (portfolio-level capital constraints and exposure caps) is the next step.
+**Phases 09A through 09E are complete.** The full research pipeline is operational: signal generation → trade simulation → portfolio analysis → universe filtering → investor-ready reporting. All results have been validated across the full 2,582-ticker universe with batched time-window analysis.
 
 ### Completed Milestones
 
@@ -1176,6 +1215,8 @@ output/backtests/<run_tag>/portfolio/
 7. Stop sensitivity — ATR multiplier 1.5 vs 2.0 vs 3.0
 8. Time stop sensitivity — 30 vs 45 vs 60 vs 90 days
 
+---
+
 ### 12i. Sensitivity Research Roadmap
 
 Every experiment below requires only a change to `config/backtest.yaml` followed by re-running `09B` or `09C` — no code changes required.
@@ -1192,6 +1233,290 @@ Every experiment below requires only a change to `config/backtest.yaml` followed
 | Stage 7 only | `entry_stages: [7]` | Is Stage 6 entry adding or subtracting edge? |
 
 ---
+
+### 12j. Phase 09D — Universe Filter & Enriched Report
+
+**Purpose:** Identify the investable subset of the universe by filtering out tickers where the strategy has no statistical edge, and enrich every ticker with sector information for downstream analysis.
+
+**Filter logic (all conditions must pass):**
+
+| Filter | Default | Description |
+|---|---|---|
+| `min_trades` | 5 | Minimum trades for statistical validity |
+| `min_profit_factor` | 1.0 | Gross wins must exceed gross losses |
+| `min_expectancy_r` | 0.0 | Average R per trade must be positive |
+| `max_drawdown_pct` | -60.0% | Reject deeply broken tickers |
+| `min_win_rate_pct` | 0.0 | Optional win rate floor |
+
+All thresholds are configurable in `config/backtest.yaml` under `filter:`.
+
+**Run:**
+```powershell
+python research/experiments/09D_filter_enrich_report.py
+```
+
+**Outputs — `output/reports/universe_filter/`:**
+
+| File | Description |
+|---|---|
+| `universe_filter_report.xlsx` | 4-sheet Excel: Full Universe / Passing / Rejected / Settings |
+| `filtered_tickers.csv` | Passing tickers list — input for 09E |
+| `rejected_tickers.csv` | Full metrics for all rejected tickers |
+| `rejected_tickers.xlsx` | Formatted standalone Excel for rejected tickers |
+| `summary_enriched.csv` | Full universe with sector column added |
+| `filter_report.json` | Summary + config snapshot (audit trail) |
+
+**Filter results (baseline run — `universe_baseline_v1_20260224_2310`):**
+
+| Metric | Value |
+|---|---|
+| Total tickers | 2,582 |
+| Passed | 1,251 (48.5%) |
+| Rejected | 1,331 (51.5%) |
+
+**Passing tickers by sector:**
+
+| Sector | Tickers | Avg Profit Factor | Avg Expectancy R |
+|---|---|---|---|
+| Financials | 320 | 1.93 | 0.332 |
+| Healthcare | 214 | **4.94** | **3.337** |
+| Industrials | 193 | 2.02 | 0.342 |
+| Technology | 180 | 2.08 | 0.420 |
+| Consumer Discretionary | 122 | 1.85 | 0.284 |
+| Materials | 53 | 2.20 | 0.382 |
+| Consumer Staples | 52 | 2.26 | 0.394 |
+| Energy | 50 | 2.01 | 0.319 |
+| Communication Services | 42 | 1.79 | 0.329 |
+| Utilities | 25 | 1.83 | 0.268 |
+
+Healthcare's outlier expectancy R (3.337) is driven by biotech/pharma names with occasional large mean-reversion moves post-dislocation. Statistically meaningful but with high variance.
+
+---
+
+### 12k. Phase 09E — Time-Batched Investor Report
+
+**Purpose:** Split trades into configurable time windows using entry-date attribution, compute per-batch and combined metrics, and produce investor-ready Excel with per-ticker sector breakdown.
+
+**Batch methodology (entry-date attribution):**
+Each trade belongs to the batch in which it *entered*. A trade entered in Batch 1 that exits in Batch 2 is counted in Batch 1. Trades are never force-closed. This is the standard fund reporting approach — you measure the vintage of each entry decision.
+
+**Run:**
+```powershell
+python research/experiments/09E_batched_report.py
+```
+
+**Outputs — `output/reports/batched/`:**
+
+| File | Description |
+|---|---|
+| `investor_report.xlsx` | 4-sheet Excel: Summary / Batch 1 Tickers / Batch 2 Tickers / Combined |
+| `batch_1_trades.parquet` | All trades with entry in Batch 1 window |
+| `batch_2_trades.parquet` | All trades with entry in Batch 2 window |
+| `batch_1_ticker_summary.csv` | Per-ticker metrics for Batch 1 |
+| `batch_2_ticker_summary.csv` | Per-ticker metrics for Batch 2 |
+| `combined_ticker_summary.csv` | Per-ticker metrics aggregated across both batches |
+| `batch_report.json` | Full metrics + config snapshot (audit trail) |
+
+**Validated batch results (filtered universe, 1,251 tickers):**
+
+| Metric | Batch 1 (2022–2023) | Batch 2 (2024–2026) | Combined |
+|---|---|---|---|
+| Trades | 8,273 | 13,509 | 21,782 |
+| Unique tickers | 1,201 | 1,251 | 1,251 |
+| Win rate | **43.6%** | 42.8% | 43.1% |
+| Profit factor | **3.07** | 1.71 | **2.26** |
+| Expectancy R | **1.17** | 0.30 | **0.63** |
+| Net PnL ($10k/ticker) | $853,737 | $424,446 | $1,278,183 |
+
+**Key interpretation:**
+Batch 1 significantly outperforms Batch 2. The 2022 Fed-driven dislocation created the deepest mean-reversion setups in a decade. Batch 2 (bull market) shows the strategy still works with reduced but positive edge — profit factor 1.71 is solid in a trending environment with fewer genuine dislocations.
+
+**Config for batch windows (`config/backtest.yaml`):**
+```yaml
+batches:
+  source_run_tag: "universe_baseline_v1_20260224_2310"
+  use_filtered_tickers: true
+  windows:
+    - name: "Batch 1 — 2022 to 2023"
+      start: "2022-01-01"
+      end:   "2023-12-31"
+    - name: "Batch 2 — 2024 to 2026"
+      start: "2024-01-01"
+      end:   "2026-12-31"
+```
+
+---
+
+### 12l. Scenarios Testing Guide
+
+All scenarios below change only `config/backtest.yaml`. No code changes required.
+For each scenario: make the config change → run the listed commands in order.
+
+**Config audit trail:** Every 09B run saves `backtest_config_snapshot.yaml` in its output folder. Every 09D/09E run saves `config_snapshot` in its JSON report. You always know exactly what config produced each result.
+
+---
+
+#### Scenario Group 1 — Stop Loss Sensitivity
+
+*Research question: Does ATR multiplier significantly affect edge? Is there an optimal stop width?*
+
+**How to run each variant:**
+```yaml
+# In config/backtest.yaml, change atr_multiplier and run_tag_prefix for each:
+stop:
+  atr_multiplier: 1.5     # Tight stops
+  # atr_multiplier: 2.0   # Baseline (already done)
+  # atr_multiplier: 3.0   # Wide stops
+```
+```powershell
+# For each variant:
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+| Variant | `run_tag_prefix` | Expected effect |
+|---|---|---|
+| Tight stop (1.5×) | `"stop_tight_v1"` | More stop-outs, lower win %, potentially higher expectancy if wins are large |
+| Baseline (2.0×) | `"universe_baseline_v1"` | Already done |
+| Wide stop (3.0×) | `"stop_wide_v1"` | Fewer stop-outs, larger losses when wrong, potentially larger winners |
+
+---
+
+#### Scenario Group 2 — Spider Gate Attribution
+
+*Research question: How much does the macro sector filter add or cost in terms of edge?*
+```yaml
+spider_gate:
+  enabled: true    # flip from false
+```
+```yaml
+run:
+  run_tag_prefix: "gate_enabled_v1"
+```
+```powershell
+# 09A does NOT need to be re-run — gate info is already in signals file
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+Compare the batched results against `universe_baseline_v1`. The delta in trade count, win rate and expectancy R IS the gate attribution.
+
+---
+
+#### Scenario Group 3 — Overlap Mode (Scale-In vs Disabled)
+
+*Research question: Does pyramiding into confirmed trends add alpha or just add risk?*
+```yaml
+sizing:
+  overlap_mode: "scale_in"
+  max_scale_ins: 2
+```
+```yaml
+run:
+  run_tag_prefix: "scalein_v1"
+```
+```powershell
+# 09A does NOT need to be re-run
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+---
+
+#### Scenario Group 4 — Time Stop Sensitivity
+
+*Research question: What is the optimal maximum holding period?*
+
+Run four variants changing only `time_stop_days`:
+
+| Variant | `time_stop_days` | `run_tag_prefix` |
+|---|---|---|
+| Short hold | `30` | `"timestop_30_v1"` |
+| Medium hold | `45` | `"timestop_45_v1"` |
+| Baseline | `60` | Already done |
+| Long hold | `90` | `"timestop_90_v1"` |
+```powershell
+# For each variant (09A not needed):
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+---
+
+#### Scenario Group 5 — Portfolio Capital & Risk Sizing
+
+*Research question: What is the optimal capital deployment at portfolio level?*
+
+For each variant, change the `portfolio:` section only and re-run 09C:
+
+| Variant | `capital` | `risk_pct` | `max_positions` | Description |
+|---|---|---|---|---|
+| A — Reference | $100k | 0.5% | null | Uncapped baseline |
+| B — Capped 20 | $100k | 0.5% | 20 | Concentrated portfolio |
+| C — Capped 30 | $100k | 0.5% | 30 | Diversified portfolio |
+| D — Lower risk | $100k | 0.25% | null | Conservative sizing |
+```powershell
+# For each variant (no 09A or 09B re-run needed):
+python research/experiments/09C_run_portfolio.py
+```
+
+---
+
+#### Scenario Group 6 — Dislocation Requirement (Stage 2 Gate)
+
+*Research question: How much does the mandatory Stage 2 prerequisite contribute to edge?*
+```yaml
+signal:
+  require_stage2_history: false   # remove dislocation requirement
+```
+```yaml
+run:
+  run_tag_prefix: "no_stage2_req_v1"
+```
+```powershell
+# 09A MUST be re-run for this — it changes signal detection logic
+python research/experiments/09A_generate_raw_signals.py
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+Compare expectancy R and profit factor vs baseline. The delta tells you exactly how much the dislocation requirement contributes to edge.
+
+---
+
+#### Recommended Testing Order for Investor Presentation
+
+Run these in sequence for a complete evidence base:
+```powershell
+# 1. Already done — baseline
+# universe_baseline_v1_20260224_2310
+
+# 2. Gate attribution (next priority — single config flip)
+# Edit: spider_gate.enabled: true, run_tag_prefix: "gate_enabled_v1"
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+
+# 3. Tight stop sensitivity
+# Edit: atr_multiplier: 1.5, run_tag_prefix: "stop_tight_v1"
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+
+# 4. No Stage 2 requirement (shows value of dislocation thesis)
+# Edit: require_stage2_history: false, run_tag_prefix: "no_stage2_req_v1"
+python research/experiments/09A_generate_raw_signals.py
+python research/experiments/09B_run_backtest.py
+python research/experiments/09D_filter_enrich_report.py
+python research/experiments/09E_batched_report.py
+```
+
+These four runs give you the cleanest investor narrative: baseline edge → macro filter impact → stop optimisation → why the dislocation requirement matters.
 
 # 13. Historical Window Refresh Protocol *(2021–2026)*
 

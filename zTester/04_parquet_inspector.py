@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parents[1]  # ALGO-Stocks/
 # Examples (uncomment the one needed):
 
 # Full universe trades (most common use case)
-INPUT_PARQUET = ROOT / "output" / "backtests" / "universe_baseline_v1_20260224_2200" / "universe" / "trades_all.parquet"
+INPUT_PARQUET = ROOT / "output" / "backtests" / "universe_baseline_v1_20260224_2310" / "universe" / "trades_all.parquet"
 
 # Single ticker trades
 # INPUT_PARQUET = ROOT / "output" / "backtests" / "baseline_v1_20260224_2149" / "single" / "AAPL" / "trades.parquet"
